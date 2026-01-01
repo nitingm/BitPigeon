@@ -7,11 +7,16 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
+
 import com.codingskillshub.bitpigeon.ui.composables.MessageBar
 import com.codingskillshub.bitpigeon.ui.composables.MessageBubble
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
+import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
 
 // Simple data model for the messages
 data class MessageData(
@@ -24,13 +29,18 @@ data class MessageData(
 
 @Composable
 fun ChatView(
+    navController: NavController,
+    systemViewModel: AppSystemViewModel,
     chatPartnerName: String,
-    messages: List<MessageData>,
-    onBackClick: () -> Unit = {},
-    onSendMessage: (String) -> Unit = {}
+    messages: List<MessageData>
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
+
+    // Collect states from ViewModel
+//    val chatList by androidx.lifecycle.viewmodel.compose.viewModel.chatList.collectAsState()
+//    val searchQuery by androidx.lifecycle.viewmodel.compose.viewModel.searchQuery.collectAsState()
+
 
     Scaffold(
         topBar = {
@@ -38,13 +48,15 @@ fun ChatView(
                 title = chatPartnerName,
                 subtitle = "Active via Wi-Fi Direct",
                 showLeadingImage = true,
-                onNavigationClick = onBackClick
+                onNavigationClick = {
+                    navController.popBackStack()
+                }
             )
         },
         bottomBar = {
             // Padding used to prevent keyboard overlap in modern Android
             Column(modifier = Modifier.imePadding()) {
-                MessageBar(onSendMessage = onSendMessage)
+                MessageBar(onSendMessage = {})
             }
         }
     ) { innerPadding ->
@@ -86,6 +98,8 @@ fun ChatViewPreview() {
 
     ChatView(
         chatPartnerName = "Aman Gupta",
-        messages = dummyMessages
+        messages = dummyMessages,
+        navController = NavController(LocalContext.current),
+        systemViewModel = viewModel()
     )
 }

@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,35 +17,58 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.models.ChatData
 import com.codingskillshub.bitpigeon.ui.composables.BitPigeonNavigationBar
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
+import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
 import kotlinx.coroutines.launch
 
 @Composable
-fun MainView() {
+fun MainView(
+    navController: NavController,
+    systemViewModel: AppSystemViewModel
+) {
     // 1. Pager State for Swiping (0 = Chats, 1 = Settings)
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
 
-    // Search state for the ChatListView
-    var searchQuery by remember { mutableStateOf("") }
+    // Collect the flow into a State object that Compose understands
+    val isWifiEnabled by systemViewModel.isWifiEnabled.collectAsState()
 
     Scaffold(
         topBar = {
             ViewHeader(
-                title = if (pagerState.currentPage == 0) "BitPigeon" else "Settings",
-                subtitle = if (pagerState.currentPage == 0) "Wi-Fi Direct Messaging" else null,
+                title = when (pagerState.currentPage) {
+                    0 -> "BitPigeon"
+                    1 -> "Discover"
+                    2 -> "Settings"
+                    else -> "BitPigeon"
+                },
+                subtitle = if (pagerState.currentPage == 0 && isWifiEnabled) "Wi-Fi Direct Messaging" else null,
                 showNavigationIcon = false, // No back button on main screen
                 showOptionsIcon = true
             )
         },
         bottomBar = {
             BitPigeonNavigationBar(
-                currentRoute = if (pagerState.currentPage == 0) "chats_screen" else "settings_screen",
+                currentRoute = when (pagerState.currentPage) {
+                    0 -> "chats_screen"
+                    1 -> "discover_screen"
+                    2 -> "settings_screen"
+                    else -> "chats_screen"
+                },
                 onNavigate = { route ->
-                    val targetPage = if (route == "chats_screen") 0 else 1
+                    val targetPage = when (route) {
+                        "chats_screen" -> 0
+                        "discover_screen" -> 1
+                        "settings_screen" -> 2
+                        else -> 0
+                    }
                     scope.launch {
                         pagerState.animateScrollToPage(targetPage)
                     }
@@ -65,16 +89,22 @@ fun MainView() {
                     // Page 1: Chat List
                     ChatListView(
                         chatList = getSampleChats(),
-                        searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
                         onChatClick = { chat ->
                             // Handle navigation to ChatView
+                            navController.navigate("chatview/${chat.id}")
                         }
                     )
                 }
 
                 1 -> {
-                    // Page 2: Settings (Placeholder for now)
+                    // Page 2: Discover (Placeholder for now)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(text = "Discover Content Goes Here")
+                    }
+                }
+
+                2 -> {
+                    // Page 3: Settings (Placeholder for now)
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(text = "Settings Content Goes Here")
                     }
@@ -95,6 +125,7 @@ private fun getSampleChats() = listOf(
 @Composable
 fun MainViewPreview() {
     MaterialTheme {
-        MainView()
+        MainView(navController = NavController(LocalContext.current),
+                systemViewModel = viewModel())
     }
 }

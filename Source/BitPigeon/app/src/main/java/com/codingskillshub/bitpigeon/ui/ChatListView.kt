@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatListViewModel
 import com.codingskillshub.bitpigeon.models.ChatData
 import com.codingskillshub.bitpigeon.ui.composables.ChatEntry
 import com.codingskillshub.bitpigeon.ui.composables.SearchBar
@@ -21,16 +23,16 @@ import com.codingskillshub.bitpigeon.ui.composables.SearchBar
 @Composable
 fun ChatListView(
     chatList: List<ChatData>,
-    searchQuery: String,
-    onQueryChange: (String) -> Unit,
     onChatClick: (ChatData) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    chatListViewModel: ChatListViewModel = viewModel()
 ) {
+    var searchQuery by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize()) {
         // Add the SearchBar at the top
         SearchBar(
             query = searchQuery,
-            onQueryChange = onQueryChange,
+            onQueryChange = {},
             onSearchClick = { /* Optional: handle focus or navigation */ }
         )
         LazyColumn(
@@ -58,7 +60,6 @@ fun ChatListView(
 @Preview(showBackground = true)
 @Composable
 fun ChatListViewPreview() {
-    var query by remember { mutableStateOf("") }
     val sampleChats = listOf(
         ChatData("1", "Aman Gupta", "Got the files!", "27/12/2025"),
         ChatData("2", "John Doe", "Are you online?", "26/12/2025"),
@@ -70,8 +71,6 @@ fun ChatListViewPreview() {
     MaterialTheme {
         ChatListView(
             chatList = sampleChats,
-            searchQuery = query,
-            onQueryChange = { query = it },
             onChatClick = { /* Handle navigation */ }
         )
     }

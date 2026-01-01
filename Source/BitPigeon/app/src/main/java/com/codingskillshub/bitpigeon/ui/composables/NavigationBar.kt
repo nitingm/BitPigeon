@@ -1,8 +1,10 @@
 package com.codingskillshub.bitpigeon.ui.composables
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.WifiFind
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -27,7 +29,8 @@ fun BitPigeonNavigationBar(
 ) {
     // 2. Define the list of icons. You can add more items here later. 
     val items = listOf(
-        NavItem("Chats", Icons.Default.Chat, "chats_screen"),
+        NavItem("Chats", Icons.AutoMirrored.Default.Chat, "chats_screen"),
+        NavItem("Discover", Icons.Default.WifiFind, route = "discover_screen"),
         NavItem("Settings", Icons.Default.Settings, "settings_screen")
     )
 
