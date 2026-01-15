@@ -6,11 +6,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 @HiltViewModel
-class AppSystemViewModel @Inject constructor(
+class DiscoverViewModel @Inject constructor(
     private val wifiService: WifiCommunicationService
 ) : ViewModel() {
-    // Example global states
-    val isWifiEnabled = wifiService.isWifiEnabled
+    val peersList = wifiService.peersList
 
-    val deviceName = wifiService.deviceName
 }

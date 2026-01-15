@@ -22,7 +22,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.codingskillshub.bitpigeon.models.ChatData
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.BitPigeonNavigationBar
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
@@ -46,7 +47,7 @@ fun MainView(
                 title = when (pagerState.currentPage) {
                     0 -> "BitPigeon"
                     1 -> "Discover"
-                    2 -> "Settings"
+                    2 -> "Profile"
                     else -> "BitPigeon"
                 },
                 subtitle = if (pagerState.currentPage == 0 && isWifiEnabled) "Wi-Fi Direct Messaging" else null,
@@ -59,14 +60,14 @@ fun MainView(
                 currentRoute = when (pagerState.currentPage) {
                     0 -> "chats_screen"
                     1 -> "discover_screen"
-                    2 -> "settings_screen"
+                    2 -> "profile_screen"
                     else -> "chats_screen"
                 },
                 onNavigate = { route ->
                     val targetPage = when (route) {
                         "chats_screen" -> 0
                         "discover_screen" -> 1
-                        "settings_screen" -> 2
+                        "profile_screen" -> 2
                         else -> 0
                     }
                     scope.launch {
@@ -87,7 +88,7 @@ fun MainView(
             when (pageIndex) {
                 0 -> {
                     // Page 1: Chat List
-                    ChatListView(
+                    ChatGroupListView(
                         chatList = getSampleChats(),
                         onChatClick = { chat ->
                             // Handle navigation to ChatView
@@ -97,17 +98,21 @@ fun MainView(
                 }
 
                 1 -> {
-                    // Page 2: Discover (Placeholder for now)
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Discover Content Goes Here")
-                    }
+                    // Page 2: Discover
+                    DiscoverView(
+                        {},
+                        discoverViewModel = hiltViewModel()
+                    )
                 }
 
                 2 -> {
-                    // Page 3: Settings (Placeholder for now)
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(text = "Settings Content Goes Here")
-                    }
+                    // Page 3: Profile
+                    ProfileView(
+                        onEditClick = {
+                            navController.navigate("profile_edit")
+                        },
+                        viewModel = hiltViewModel()
+                    )
                 }
             }
         }
@@ -116,9 +121,9 @@ fun MainView(
 
 // Helper to provide dummy data for the preview
 private fun getSampleChats() = listOf(
-    ChatData("1", "Aman Gupta", "Is the Wi-Fi connected?", "27/12/2025"),
-    ChatData("2", "John Doe", "Sent the zip file.", "26/12/2025"),
-    ChatData("3", "Dev Team", "K2 compiler is fast!", "25/12/2025")
+    ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT,"Is the Wi-Fi connected?", "27/12/2025"),
+    ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Sent the zip file.", "26/12/2025"),
+    ChatGroup("3", "Dev Team", ChatGroupType.DIRECT,"K2 compiler is fast!", "25/12/2025")
 )
 
 @Preview(showBackground = true)

@@ -28,7 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun MessageBar(
+fun MessageInputBar(
     onSendMessage: (String) -> Unit = {}
 ) {
     var textState by remember { mutableStateOf("") }
@@ -98,6 +98,6 @@ fun MessageBar(
 @Composable
 fun MessageBarPreview() {
     MaterialTheme {
-        MessageBar()
+        MessageInputBar()
     }
 }

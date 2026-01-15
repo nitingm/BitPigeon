@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.kapt)
+    alias(libs.plugins.google.devtools.ksp)
 }
 
 
@@ -43,6 +44,7 @@ android {
 }
 
 dependencies {
+    val room_version = "2.6.1"
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
@@ -61,11 +63,21 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
     // Hilt for Jetpack Compose Navigation
     implementation(libs.hilt.navigation.compose)
+
+    // Room Runtime
+    implementation("androidx.room:room-runtime:$room_version")
+    // Room KSP (Annotation Processor)
+    ksp("androidx.room:room-compiler:$room_version")
+    // Optional: Kotlin Extensions and Coroutines support for Room
+    implementation("androidx.room:room-ktx:$room_version")
+    // Optional: Test helpers
+    testImplementation("androidx.room:room-testing:$room_version")
 
 }
 

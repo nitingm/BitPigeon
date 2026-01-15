@@ -13,10 +13,11 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-import com.codingskillshub.bitpigeon.ui.composables.MessageBar
+import com.codingskillshub.bitpigeon.ui.composables.MessageInputBar
 import com.codingskillshub.bitpigeon.ui.composables.MessageBubble
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 
 // Simple data model for the messages
 data class MessageData(
@@ -30,9 +31,10 @@ data class MessageData(
 @Composable
 fun ChatView(
     navController: NavController,
-    systemViewModel: AppSystemViewModel,
     chatPartnerName: String,
-    messages: List<MessageData>
+    messages: List<MessageData>,
+    systemViewModel: AppSystemViewModel,
+    chatViewModel: ChatViewModel,
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
@@ -56,7 +58,7 @@ fun ChatView(
         bottomBar = {
             // Padding used to prevent keyboard overlap in modern Android
             Column(modifier = Modifier.imePadding()) {
-                MessageBar(onSendMessage = {})
+                MessageInputBar(onSendMessage = { text -> chatViewModel.sendMessage(text)})
             }
         }
     ) { innerPadding ->
@@ -100,6 +102,7 @@ fun ChatViewPreview() {
         chatPartnerName = "Aman Gupta",
         messages = dummyMessages,
         navController = NavController(LocalContext.current),
-        systemViewModel = viewModel()
+        systemViewModel = viewModel(),
+        chatViewModel = viewModel()
     )
 }

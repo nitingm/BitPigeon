@@ -1,14 +1,20 @@
-package com.codingskillshub.bitpigeon.services
+package com.codingskillshub.bitpigeon.domain.services
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
 import android.net.NetworkInfo
+import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pDeviceList
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
+import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import androidx.core.content.ContextCompat
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +25,7 @@ import javax.inject.Singleton
 class WifiCommunicationService @Inject constructor(
     private val manager: WifiP2pManager,
     private val channel: WifiP2pManager.Channel,
-    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
+    @ApplicationContext private val context: Context
 ) {
 
     // 1. Use MutableStateFlow to hold the state
@@ -29,7 +35,7 @@ class WifiCommunicationService @Inject constructor(
 
     // 2. State for Discovered Peers
     private val _peers = MutableStateFlow<List<WifiP2pDevice>>(emptyList())
-    val peers: StateFlow<List<WifiP2pDevice>> = _peers.asStateFlow()
+    val peersList: StateFlow<List<WifiP2pDevice>> = _peers.asStateFlow()
 
     // 3. State for Connection Info (IP addresses, Group Owner status)
     private val _connectionInfo = MutableStateFlow<WifiP2pInfo?>(null)
@@ -57,7 +63,7 @@ class WifiCommunicationService @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun discoverPeers() {
-        if (!hasWifiDirectPermissions()) {
+        if (hasWifiDirectPermissions()) {
             manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     Log.d("WifiCommService", "Discovery Started Successfully")
@@ -106,7 +112,7 @@ class WifiCommunicationService @Inject constructor(
     @SuppressLint("MissingPermission")
     fun connectToPeer(device: WifiP2pDevice) {
         if (hasWifiDirectPermissions()) {
-            val config = android.net.wifi.p2p.WifiP2pConfig().apply {
+            val config = WifiP2pConfig().apply {
                 deviceAddress = device.deviceAddress
             }
 
@@ -126,14 +132,14 @@ class WifiCommunicationService @Inject constructor(
     }
 
     private fun hasWifiDirectPermissions(): Boolean {
-        val hasLocation = androidx.core.content.ContextCompat.checkSelfPermission(
+        val hasLocation = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) == PackageManager.PERMISSION_GRANTED
 
-        val hasNearby = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            androidx.core.content.ContextCompat.checkSelfPermission(
+        val hasNearby = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
                 context, Manifest.permission.NEARBY_WIFI_DEVICES
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) == PackageManager.PERMISSION_GRANTED
         } else true
 
         return hasLocation && hasNearby

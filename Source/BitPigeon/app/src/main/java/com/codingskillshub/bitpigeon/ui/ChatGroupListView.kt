@@ -15,17 +15,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.codingskillshub.bitpigeon.ui.viewmodels.ChatListViewModel
-import com.codingskillshub.bitpigeon.models.ChatData
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.ChatEntry
 import com.codingskillshub.bitpigeon.ui.composables.SearchBar
 
 @Composable
-fun ChatListView(
-    chatList: List<ChatData>,
-    onChatClick: (ChatData) -> Unit,
+fun ChatGroupListView(
+    chatList: List<ChatGroup>,
+    onChatClick: (ChatGroup) -> Unit,
     modifier: Modifier = Modifier,
-    chatListViewModel: ChatListViewModel = viewModel()
+    chatGroupListViewModel: ChatGroupListViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize()) {
@@ -47,7 +48,7 @@ fun ChatListView(
                 key = { chat -> chat.id }
             ) { chat ->
                 ChatEntry(
-                    name = chat.senderName,
+                    name = chat.name,
                     lastMessage = chat.lastMessage,
                     timestamp = chat.timestamp,
                     onClick = { onChatClick(chat) }
@@ -59,17 +60,17 @@ fun ChatListView(
 
 @Preview(showBackground = true)
 @Composable
-fun ChatListViewPreview() {
+fun ChatGroupListViewPreview() {
     val sampleChats = listOf(
-        ChatData("1", "Aman Gupta", "Got the files!", "27/12/2025"),
-        ChatData("2", "John Doe", "Are you online?", "26/12/2025"),
-        ChatData("3", "Project Group", "Meeting at 5 PM", "25/12/2025"),
-        ChatData("4", "Mama", "Call me later", "24/12/2025"),
-        ChatData("5", "BitPigeon Support", "Welcome to the app!", "20/12/2025")
+        ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT, "Got the files!", "27/12/2025"),
+        ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Are you online?", "26/12/2025"),
+        ChatGroup("3", "Project Group", ChatGroupType.DIRECT, "Meeting at 5 PM", "25/12/2025"),
+        ChatGroup("4", "Mama", ChatGroupType.DIRECT, "Call me later", "24/12/2025"),
+        ChatGroup("5", "BitPigeon Support", ChatGroupType.DIRECT, "Welcome to the app!", "20/12/2025")
     )
 
     MaterialTheme {
-        ChatListView(
+        ChatGroupListView(
             chatList = sampleChats,
             onChatClick = { /* Handle navigation */ }
         )

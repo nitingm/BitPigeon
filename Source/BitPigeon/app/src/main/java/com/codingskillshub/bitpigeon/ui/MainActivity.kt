@@ -2,7 +2,6 @@ package com.codingskillshub.bitpigeon.ui
 
 import android.Manifest
 import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.IntentFilter
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
@@ -11,14 +10,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.navigation
+import androidx.navigation.navArgument
 
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
-import com.codingskillshub.bitpigeon.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.ProfileViewModel
+
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -32,10 +36,6 @@ class MainActivity : ComponentActivity() {
     lateinit var channel: WifiP2pManager.Channel
     @Inject
     lateinit var wifiService: WifiCommunicationService
-
-    private val systemViewModel: AppSystemViewModel by lazy {
-        androidx.lifecycle.ViewModelProvider(this)[AppSystemViewModel::class.java]
-    }
 
     // Inside your Activity
     private val intentFilter = IntentFilter().apply {
@@ -79,14 +79,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val navController = androidx.navigation.compose.rememberNavController() // From Navigation library
+            val systemViewModel: AppSystemViewModel = hiltViewModel()
+            val profileViewModel: ProfileViewModel = hiltViewModel()
 
             NavHost(navController = navController, startDestination = "main") {
                 composable("main") {
                     MainView(navController, systemViewModel)
                 }
                 navigation(startDestination = "chatview", route = "chat") {
-                    composable("chatview/{chatId}") { backStackEntry ->
-                        val chatId = backStackEntry.arguments?.getString("chatId")
+                    composable("chatview/{chatId}",
+                        arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                        val chatViewModel: ChatViewModel = hiltViewModel()
+                        val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
                         val dummyMessages = listOf(
                             MessageData("1", "Aman Gupta", "Hey! Is the Wi-Fi P2P working?", "10:00", false),
                             MessageData("2", "Me", "Yes, just finished the ChatView implementation.", "10:01", true),
@@ -94,8 +99,11 @@ class MainActivity : ComponentActivity() {
                             MessageData("4", "Me", "Working perfectly fine. 👍", "10:03", true),
                         )
 
-                        ChatView(navController, systemViewModel, chatId.toString(), dummyMessages)
+                        ChatView(navController,  chatId, dummyMessages, systemViewModel, chatViewModel)
                     }
+                }
+                composable("profile_edit") {
+                    ProfileEditView(onNavigateBack = { navController.popBackStack() }, profileViewModel)
                 }
             }
         }
