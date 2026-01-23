@@ -14,27 +14,54 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroupDb
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.ChatEntry
 import com.codingskillshub.bitpigeon.ui.composables.SearchBar
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 
 @Composable
 fun ChatGroupListView(
+    navController: NavController,
+    chatGroupListViewModel: ChatGroupListViewModel = viewModel()
+) {
+    val conversations by chatGroupListViewModel.conversations.collectAsStateWithLifecycle()
+
+    ChatGroupListViewContent(
+        chatList = conversations,
+        onChatClick = { chat ->
+            // Handle navigation to ChatView
+            navController.navigate("chatview/${chat.group.id}")
+        },
+        onSearchClick = {
+            navController.navigate("search_group")
+        }
+
+    )
+}
+
+@Composable
+fun ChatGroupListViewContent(
     chatList: List<ChatGroup>,
     onChatClick: (ChatGroup) -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
-    chatGroupListViewModel: ChatGroupListViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     Column(modifier = modifier.fillMaxSize()) {
         // Add the SearchBar at the top
         SearchBar(
+            isSearchView = false,
             query = searchQuery,
             onQueryChange = {},
-            onSearchClick = { /* Optional: handle focus or navigation */ }
+            onSearchClick = {
+                onSearchClick()
+            }
         )
         LazyColumn(
             modifier = modifier.weight(1f), // Takes up remaining space,
@@ -45,10 +72,10 @@ fun ChatGroupListView(
             items(
                 items = chatList,
                 // Providing a 'key' helps Compose optimize list updates/reordering
-                key = { chat -> chat.id }
+                key = { chat -> chat.group.id }
             ) { chat ->
                 ChatEntry(
-                    name = chat.name,
+                    name = chat.group.name,
                     lastMessage = chat.lastMessage,
                     timestamp = chat.timestamp,
                     onClick = { onChatClick(chat) }
@@ -62,17 +89,18 @@ fun ChatGroupListView(
 @Composable
 fun ChatGroupListViewPreview() {
     val sampleChats = listOf(
-        ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT, "Got the files!", "27/12/2025"),
-        ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Are you online?", "26/12/2025"),
-        ChatGroup("3", "Project Group", ChatGroupType.DIRECT, "Meeting at 5 PM", "25/12/2025"),
-        ChatGroup("4", "Mama", ChatGroupType.DIRECT, "Call me later", "24/12/2025"),
-        ChatGroup("5", "BitPigeon Support", ChatGroupType.DIRECT, "Welcome to the app!", "20/12/2025")
+        ChatGroup(ChatGroupDb ( "1", "Aman Gupta", ChatGroupType.DIRECT ), emptyList(),"Got the files!", "27/12/2025"),
+        ChatGroup(ChatGroupDb ("2", "John Doe", ChatGroupType.DIRECT), emptyList(),"Are you online?", "26/12/2025"),
+        ChatGroup(ChatGroupDb ("3", "Project Group", ChatGroupType.DIRECT),emptyList(), "Meeting at 5 PM", "25/12/2025"),
+        ChatGroup(ChatGroupDb ("4", "Mama", ChatGroupType.DIRECT),emptyList(), "Call me later", "24/12/2025"),
+        ChatGroup(ChatGroupDb ("5", "BitPigeon Support", ChatGroupType.DIRECT),emptyList(), "Welcome to the app!", "20/12/2025")
     )
 
     MaterialTheme {
-        ChatGroupListView(
+        ChatGroupListViewContent(
             chatList = sampleChats,
-            onChatClick = { /* Handle navigation */ }
+            onChatClick = { /* Handle navigation */ },
+            onSearchClick = { /* Handle search */ }
         )
     }
 }

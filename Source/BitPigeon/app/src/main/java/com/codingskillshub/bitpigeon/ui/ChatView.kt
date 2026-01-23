@@ -12,6 +12,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.room.PrimaryKey
+import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
+import com.codingskillshub.bitpigeon.domain.entities.ChatMessageUIExtented
+import com.codingskillshub.bitpigeon.domain.entities.MessageData
 
 import com.codingskillshub.bitpigeon.ui.composables.MessageInputBar
 import com.codingskillshub.bitpigeon.ui.composables.MessageBubble
@@ -19,30 +23,37 @@ import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 
-// Simple data model for the messages
-data class MessageData(
-    val id: String,
-    val sender: String,
-    val text: String,
-    val time: String,
-    val isMe: Boolean
-)
-
 @Composable
 fun ChatView(
     navController: NavController,
-    chatPartnerName: String,
-    messages: List<MessageData>,
     systemViewModel: AppSystemViewModel,
-    chatViewModel: ChatViewModel,
+    chatViewModel: ChatViewModel
+) {
+    val messages by chatViewModel.messages.collectAsState()
+    val chatGroup by chatViewModel.chatGroup.collectAsState()
+
+    ChatViewContent(
+        chatPartnerName = chatGroup?.group?.name?: "Unknown",
+        messages = messages,
+        onSendMessage = {
+            messageText -> chatViewModel.sendMessage(messageText)
+        },
+        onBackClick = {
+            navController.popBackStack()
+        }
+    )
+
+}
+
+@Composable
+fun ChatViewContent(
+    chatPartnerName: String,
+    messages: List<ChatMessageUIExtented>,
+    onSendMessage: (String) -> Unit,
+    onBackClick: () -> Unit
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
-
-    // Collect states from ViewModel
-//    val chatList by androidx.lifecycle.viewmodel.compose.viewModel.chatList.collectAsState()
-//    val searchQuery by androidx.lifecycle.viewmodel.compose.viewModel.searchQuery.collectAsState()
-
 
     Scaffold(
         topBar = {
@@ -51,14 +62,14 @@ fun ChatView(
                 subtitle = "Active via Wi-Fi Direct",
                 showLeadingImage = true,
                 onNavigationClick = {
-                    navController.popBackStack()
+                    onBackClick()
                 }
             )
         },
         bottomBar = {
             // Padding used to prevent keyboard overlap in modern Android
             Column(modifier = Modifier.imePadding()) {
-                MessageInputBar(onSendMessage = { text -> chatViewModel.sendMessage(text)})
+                MessageInputBar(onSendMessage = { text -> onSendMessage(text)})
             }
         }
     ) { innerPadding ->
@@ -73,15 +84,15 @@ fun ChatView(
         ) {
             items(
                 items = messages,
-                key = { it.id }
+                key = { it.message.timestamp }
             ) { message ->
                 MessageBubble(
-                    senderName = message.sender,
-                    messageText = message.text,
-                    timestamp = message.time,
-                    isSentByMe = message.isMe,
+                    senderName = message.userName,
+                    messageText = message.message.data.text,
+                    timestamp = message.message.timestamp,
+                    isSentByMe = message.isSentByMe,
                     // Only show header if it's the first message or sender changed
-                    showHeader = !message.isMe
+                    showHeader = !message.isSentByMe
                 )
             }
         }
@@ -92,17 +103,64 @@ fun ChatView(
 @Composable
 fun ChatViewPreview() {
     val dummyMessages = listOf(
-        MessageData("1", "Aman Gupta", "Hey! Is the Wi-Fi P2P working?", "10:00", false),
-        MessageData("2", "Me", "Yes, just finished the ChatView implementation.", "10:01", true),
-        MessageData("3", "Aman Gupta", "Awesome, try sending an emoji! 🚀", "10:02", false),
-        MessageData("4", "Me", "Working perfectly fine. 👍", "10:03", true),
+        ChatMessageUIExtented(
+            ChatMessage(
+                "1",
+                "2",
+                "2",
+                MessageData("Hey! Is the Wi-Fi P2P working?", emptyList()),
+                "21:21"
+                ),
+            "John",
+            true,
+            true,
+            true
+        ),
+        ChatMessageUIExtented(
+            ChatMessage(
+                "1",
+                "2",
+                "2",
+                MessageData("Yes, just finished the ChatView implementation.", emptyList()),
+                "21:21"
+            ),
+            "Murphy",
+            false,
+            true,
+            false
+        ),
+        ChatMessageUIExtented(
+            ChatMessage(
+                "1",
+                "2",
+                "2",
+                MessageData("Awesome, try sending an emoji! 🚀", emptyList()),
+                "21:21"
+            ),
+            "John",
+            true,
+            false,
+            false
+        ),
+        ChatMessageUIExtented(
+            ChatMessage(
+                "1",
+                "2",
+                "2",
+                MessageData("Working perfectly fine. 👍", emptyList()),
+                "21:21"
+            ),
+            "Murphy",
+            false,
+            true,
+            false
+        )
     )
 
-    ChatView(
+    ChatViewContent(
         chatPartnerName = "Aman Gupta",
         messages = dummyMessages,
-        navController = NavController(LocalContext.current),
-        systemViewModel = viewModel(),
-        chatViewModel = viewModel()
+        {},
+        {}
     )
 }

@@ -89,11 +89,8 @@ fun MainView(
                 0 -> {
                     // Page 1: Chat List
                     ChatGroupListView(
-                        chatList = getSampleChats(),
-                        onChatClick = { chat ->
-                            // Handle navigation to ChatView
-                            navController.navigate("chatview/${chat.id}")
-                        }
+                        navController,
+                        chatGroupListViewModel = hiltViewModel()
                     )
                 }
 
@@ -120,11 +117,11 @@ fun MainView(
 }
 
 // Helper to provide dummy data for the preview
-private fun getSampleChats() = listOf(
-    ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT,"Is the Wi-Fi connected?", "27/12/2025"),
-    ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Sent the zip file.", "26/12/2025"),
-    ChatGroup("3", "Dev Team", ChatGroupType.DIRECT,"K2 compiler is fast!", "25/12/2025")
-)
+//private fun getSampleChats() = listOf(
+//    ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT,"Is the Wi-Fi connected?", "27/12/2025"),
+//    ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Sent the zip file.", "26/12/2025"),
+//    ChatGroup("3", "Dev Team", ChatGroupType.DIRECT,"K2 compiler is fast!", "25/12/2025")
+//)
 
 @Preview(showBackground = true)
 @Composable

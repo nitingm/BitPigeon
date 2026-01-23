@@ -1,12 +1,14 @@
 package com.codingskillshub.bitpigeon.common
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +21,7 @@ class ConfigurationService @Inject constructor(
     private val PHONE_NUMBER = stringPreferencesKey("phone_number")
     private val EMAIL_ADDRESS = stringPreferencesKey("email_address")
     private val STATUS_LABEL = stringPreferencesKey("status")
-
+    private val USER_ID_KEY = stringPreferencesKey("permanent_user_id")
 
     // Signal/Flow for UI to observe
     val userNameFlow: Flow<String> = context.dataStore.data
@@ -34,6 +36,8 @@ class ConfigurationService @Inject constructor(
     val statusLabel: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[STATUS_LABEL] ?: "DefaultStatus" }
 
+    val userIdFlow: Flow<String?> = context.dataStore.data
+        .map { preferences -> preferences[USER_ID_KEY] }
 
     suspend fun updateUserName(name: String) {
         context.dataStore.edit { preferences ->
@@ -58,4 +62,19 @@ class ConfigurationService @Inject constructor(
             preferences[STATUS_LABEL] = status
         }
     }
+
+    suspend fun generateAndSaveUserId() {
+        // Option A: Simple UUID (Unique but not cryptographically verifiable)
+        context.dataStore.edit { preferences ->
+            val existingId = preferences[USER_ID_KEY]
+            if (existingId == null) {
+                // Generate only if it does not exist
+                val newId = UUID.randomUUID().toString()
+                preferences[USER_ID_KEY] = newId
+            }
+
+        }
+        Log.d("ConfigurationService", "My Unique P2P ID is: $userIdFlow.value")
+    }
+
 }

@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardBackspace
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -24,9 +26,11 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun SearchBar(
+    isSearchView: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
     onSearchClick: () -> Unit = {},
+    onBackClick: () -> Unit = {},
     placeholderText: String = "Search",
     modifier: Modifier = Modifier
 ) {
@@ -48,12 +52,18 @@ fun SearchBar(
         },
         leadingIcon = {
             // Material Search icon acts as the "binocular" equivalent/standard search icon
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search Icon",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            IconButton(
+                onClick = {
+                    if (isSearchView) onBackClick() else onSearchClick()
+                }
+            ) {
+                Icon(
+                    imageVector = if (isSearchView) Icons.AutoMirrored.Filled.KeyboardBackspace else Icons.Default.Search,
+                    contentDescription = "Search Icon",
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         },
         shape = RoundedCornerShape(28.dp), // Makes it look like a pill/bar
         colors = OutlinedTextFieldDefaults.colors(
@@ -74,9 +84,26 @@ fun SearchBarPreview() {
     var text by remember { mutableStateOf("") }
     MaterialTheme {
         SearchBar(
+            true,
             query = text,
             onQueryChange = { text = it },
-            onSearchClick = { /* Navigate to search screen */ }
+            onSearchClick = { /* Navigate to search screen */ },
+            onBackClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun SearchBarSearchPreview() {
+    var text by remember { mutableStateOf("") }
+    MaterialTheme {
+        SearchBar(
+            false,
+            query = text,
+            onQueryChange = { text = it },
+            onSearchClick = { /* Navigate to search screen */ },
+            onBackClick = {}
         )
     }
 }

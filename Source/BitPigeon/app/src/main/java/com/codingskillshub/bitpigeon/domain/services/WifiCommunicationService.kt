@@ -44,6 +44,8 @@ class WifiCommunicationService @Inject constructor(
     private val _deviceName = MutableStateFlow("Unknown Device")
     val deviceName: StateFlow<String> = _deviceName.asStateFlow()
 
+    private val _deviceAddress = MutableStateFlow("Unknown Device")
+    val deviceAddress: StateFlow<String> = _deviceAddress.asStateFlow()
 
     fun updateWifiStatus(enabled: Boolean) {
         // 3. Updating the value automatically emits a signal to all collectors

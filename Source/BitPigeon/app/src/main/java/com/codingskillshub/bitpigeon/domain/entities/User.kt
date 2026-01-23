@@ -11,6 +11,20 @@ data class User(
     val deviceAddress: String,
     val phoneNumber: String,
     val email: String,
-    val profilePicturePath: String? = null,
-    @Ignore val status: String = "Hey there i'm using BitPigeon"
-)
+    val profilePicturePath: String? = null
+) {
+    @Ignore
+    var status: String = "Hey there i'm using BitPigeon"
+
+    constructor(
+        id: String,
+        name: String,
+        deviceAddress: String,
+        phoneNumber: String,
+        email: String,
+        profilePicturePath: String? = null,
+        status: String
+    ) : this(id, name, deviceAddress, phoneNumber, email, profilePicturePath) {
+        this.status = status
+    }
+}

@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
@@ -20,10 +21,12 @@ import androidx.navigation.navArgument
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ProfileViewModel
 
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -61,6 +64,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        lifecycleScope.launch {
+
+        }
+
         // 1. Create the launcher
         val requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -81,25 +88,23 @@ class MainActivity : ComponentActivity() {
             val navController = androidx.navigation.compose.rememberNavController() // From Navigation library
             val systemViewModel: AppSystemViewModel = hiltViewModel()
             val profileViewModel: ProfileViewModel = hiltViewModel()
+            val chatGroupListViewModel: ChatGroupListViewModel = hiltViewModel()
 
             NavHost(navController = navController, startDestination = "main") {
                 composable("main") {
                     MainView(navController, systemViewModel)
+                }
+                composable("search_group") {
+                    SearchChatGroupView(navController, chatGroupListViewModel)
                 }
                 navigation(startDestination = "chatview", route = "chat") {
                     composable("chatview/{chatId}",
                         arguments = listOf(navArgument("chatId") { type = NavType.StringType })
                         ) { backStackEntry ->
                         val chatViewModel: ChatViewModel = hiltViewModel()
-                        val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
-                        val dummyMessages = listOf(
-                            MessageData("1", "Aman Gupta", "Hey! Is the Wi-Fi P2P working?", "10:00", false),
-                            MessageData("2", "Me", "Yes, just finished the ChatView implementation.", "10:01", true),
-                            MessageData("3", "Aman Gupta", "Awesome, try sending an emoji! 🚀", "10:02", false),
-                            MessageData("4", "Me", "Working perfectly fine. 👍", "10:03", true),
-                        )
+                        //val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
 
-                        ChatView(navController,  chatId, dummyMessages, systemViewModel, chatViewModel)
+                        ChatView(navController,  systemViewModel, chatViewModel)
                     }
                 }
                 composable("profile_edit") {
