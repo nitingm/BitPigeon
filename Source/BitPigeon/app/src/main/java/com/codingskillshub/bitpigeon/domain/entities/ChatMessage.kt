@@ -2,11 +2,16 @@ package com.codingskillshub.bitpigeon.domain.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import java.io.Serializable
 
 data class MessageData(
     val text: String,
     val attachments: List<String> = emptyList()
-)
+) : Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 @Entity(tableName = "chat_message")
 data class ChatMessage(
@@ -15,7 +20,11 @@ data class ChatMessage(
     val senderId: String,
     val data: MessageData,
     val timestamp: String
-)
+) : Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 data class ChatMessageUIExtented(
     val message: ChatMessage,

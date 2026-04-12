@@ -10,6 +10,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroupMember
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatGroupDao
+import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ import javax.inject.Singleton
 class ConversationModel @Inject constructor(
     private val chatModel: ChatModel,
     private val chatGroupDao: ChatGroupDao,
+    private val onlineChatService: OnlineChatService,
     private val configurationService: ConfigurationService,
     private val hashService: HashService
 ) {
@@ -37,7 +39,11 @@ class ConversationModel @Inject constructor(
     private val modelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     init {
-
+        modelScope.launch {
+            onlineChatService.incomingUsers.collect { user ->
+                createDirectChat(user)
+            }
+        }
     }
 
     /**

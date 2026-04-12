@@ -13,11 +13,15 @@ import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatDao
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,6 +37,7 @@ class ChatModel @Inject constructor(
     private val userDao: UserDao,
     private val configurationService: ConfigurationService
 ) {
+    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _activeChatGroup = MutableStateFlow<ChatGroup?>(null)
 
     /**
@@ -55,6 +60,14 @@ class ChatModel @Inject constructor(
             started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    init {
+        serviceScope.launch {
+            onlineChatService.incomingMessages.collect { message ->
+                chatDao.insertMessage(message)
+            }
+        }
+    }
 
     /**
      * Updates the chat group currently being viewed.

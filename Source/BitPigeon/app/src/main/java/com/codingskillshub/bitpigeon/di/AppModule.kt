@@ -43,7 +43,8 @@ object AppModule {
     fun provideConversationModel(
         chatModel: ChatModel,
         chatGroupDao: ChatGroupDao,
+        onlineChatService: OnlineChatService,
         configurationService: ConfigurationService,
         hashService: HashService
-    ): ConversationModel = ConversationModel(chatModel, chatGroupDao, configurationService, hashService)
+    ): ConversationModel = ConversationModel(chatModel, chatGroupDao, onlineChatService, configurationService, hashService)
 }

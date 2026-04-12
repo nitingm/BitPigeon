@@ -3,6 +3,7 @@ package com.codingskillshub.bitpigeon.domain.entities
 import androidx.room.Entity
 import androidx.room.Ignore
 import androidx.room.PrimaryKey
+import java.io.Serializable
 
 @Entity(tableName = "users")
 data class User(
@@ -12,7 +13,7 @@ data class User(
     val phoneNumber: String,
     val email: String,
     val profilePicturePath: String? = null
-) {
+) : Serializable {
     @Ignore
     var status: String = "Hey there i'm using BitPigeon"
 
@@ -26,5 +27,9 @@ data class User(
         status: String
     ) : this(id, name, deviceAddress, phoneNumber, email, profilePicturePath) {
         this.status = status
+    }
+
+    companion object {
+        private const val serialVersionUID: Long = 1L
     }
 }

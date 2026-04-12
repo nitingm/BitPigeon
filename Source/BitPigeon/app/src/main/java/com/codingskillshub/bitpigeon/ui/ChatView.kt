@@ -55,6 +55,13 @@ fun ChatViewContent(
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
 
+    // Auto-scroll to latest message when new messages arrive
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(messages.size - 1)
+        }
+    }
+
     Scaffold(
         topBar = {
             ViewHeader(
@@ -80,6 +87,7 @@ fun ChatViewContent(
                 .fillMaxSize()
                 .padding(innerPadding),
             contentPadding = PaddingValues(bottom = 8.dp),
+
             reverseLayout = false // Set to true if you want messages to grow from bottom
         ) {
             items(

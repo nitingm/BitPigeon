@@ -22,7 +22,6 @@ import com.codingskillshub.bitpigeon.ui.viewmodels.DiscoverViewModel
 
 @Composable
 fun DiscoverView(
-    onChatClick: (WifiP2pDevice) -> Unit,
     discoverViewModel: DiscoverViewModel = viewModel(),
     modifier: Modifier = Modifier,
 ) {
@@ -43,7 +42,7 @@ fun DiscoverView(
                 DiscoveredPeerEntry(
                     name = peer.deviceName,
                     statusString = peer.deviceAddress,
-                    onClick = { onChatClick(peer) }
+                    onClick = { discoverViewModel.connectToPeer(peer) }
                 )
             }
         }

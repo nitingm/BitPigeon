@@ -65,13 +65,13 @@ class ChatViewModel @Inject constructor(
 
     init {
         // You can now use chatId to load data
-        println("Loading chat for ID: $chatId")
+        Log.d("ChatViewModel","Loading chat for ID: $chatId")
         // Observe the chatGroup flow and update the active chat in ChatModel
         chatGroup
             .onEach { group ->
                 if (group != null) {
                     chatModel.setActiveChatGroup(group)
-                    println("Active chat set for: ${group.group.name}")
+                    Log.d("ChatViewModel","Active chat set for: ${group.group.name}")
                 }
             }
             .launchIn(viewModelScope)
