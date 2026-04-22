@@ -10,6 +10,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroupMember
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatGroupDao
+import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,26 +23,40 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.collections.map
 
 @Singleton
 class ConversationModel @Inject constructor(
     private val chatModel: ChatModel,
     private val chatGroupDao: ChatGroupDao,
+    private val userDao: UserDao,
     private val onlineChatService: OnlineChatService,
     private val configurationService: ConfigurationService,
+    private val appSystemModel: AppSystemModel,
     private val hashService: HashService
 ) {
     // We create a dedicated scope for the model to keep the flow active
     private val modelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val _usersOnline = MutableSharedFlow<List<User>>()
+    val usersOnline = _usersOnline.asSharedFlow()
 
     init {
         modelScope.launch {
             onlineChatService.incomingUsers.collect { user ->
                 createDirectChat(user)
+            }
+            onlineChatService.availablePeerClients.collect { clients ->
+                 _usersOnline.emit(
+                    clients.map { client ->
+                        userDao.getUserById(client.user.id).firstOrNull()
+                    }.filterNotNull()
+                )
             }
         }
     }
@@ -49,8 +64,8 @@ class ConversationModel @Inject constructor(
     /**
      * Creates a Direct or Personal chat group.
      */
-    suspend fun createDirectChat(peerUser: User, isPersonal: Boolean = false) {
-        val myId = configurationService.userIdFlow.firstOrNull() ?: return
+    suspend fun createDirectChat(peerUser: User, isPersonal: Boolean = false) : String {
+        val myId = appSystemModel.getMyUserId()
         // Generate a deterministic ID:
         // For personal chats, it's just based on myId.
         // For direct, it's based on both IDs sorted.
@@ -58,6 +73,12 @@ class ConversationModel @Inject constructor(
             hashService.generatePersonalChatId(myId)
         } else {
             hashService.generateDirectGroupId(myId, peerUser.id)
+        }
+
+        // Check if the groupId already exists and return if true
+        val existingGroup = chatGroupDao.getChatGroupById(groupId).firstOrNull()
+        if (existingGroup != null) {
+            return existingGroup.group.id
         }
 
         val groupDb = ChatGroupDb(
@@ -76,8 +97,9 @@ class ConversationModel @Inject constructor(
         if (!isPersonal) {
             members.add(ChatGroupMember(id = 0, chatGroupId = groupId, userId = peerUser.id))
         }
-
         chatGroupDao.insertMembers(members)
+
+        return groupDb.id
     }
 
     fun getAllConversations(): Flow<List<ChatGroup>> {

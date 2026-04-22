@@ -1,6 +1,7 @@
 package com.codingskillshub.bitpigeon.infrastructure
 
 import android.util.Log
+import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.net.Socket
@@ -9,21 +10,18 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.MessageData
 import com.codingskillshub.bitpigeon.domain.entities.User
 
-class ClientSocketManager(private val host: String, private val port: Int) {
+class ClientSocketManager() {
     private var socket: Socket? = null
     private var outStream: ObjectOutputStream? = null
     private var inStream: ObjectInputStream? = null
-    private var clientName: String = "Client"
     private var listeningJob: Job? = null
     private val clientScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     @Volatile private var running = false
 
-    var onMessageReceived: ((ChatMessage) -> Unit)? = null
-    var onUserInfoReceived: ((User) -> Unit)? = null
+    var onMessageReceived: ((ActionMessage) -> Unit)? = null
 
-    suspend fun connect(user: User) = withContext(Dispatchers.IO) {
+    suspend fun connect(host: String, port: Int) = withContext(Dispatchers.IO) {
         try {
-            clientName = user.name
             val s = Socket(host, port)
             socket = s
             val out = ObjectOutputStream(s.getOutputStream())
@@ -31,26 +29,21 @@ class ClientSocketManager(private val host: String, private val port: Int) {
             val input = ObjectInputStream(s.getInputStream())
             inStream = input
             
-            // Send user info to server as first object
-            out.writeObject(user)
-            out.flush()
-            
             running = true
             listeningJob = clientScope.launch {
                 try {
                     while (running) {
-                        val obj = input.readObject() ?: break
-//                        if (obj is ChatMessage) {
-//                            // Print only if not sent by self
-//                            if (obj.senderId != clientName || obj.senderId == "SERVER") {
-//                                Log.d("ClientSocketManager", obj.data.text)
-//                            }
-//                        }
-                        onReceiveMessage(obj)
+                        try {
+                            val obj = input.readObject() ?: break
+                            onReceiveMessage(obj)
+                        } catch (e: Exception) {
+                            Log.e("ClientSocketManager", "Read error: ${e.message}")
+                            // Continue reading in case of stream corruption
+                        }
                     }
                     Log.d("ClientSocketManager", "Listening stopped")
                 } catch (e: Exception) {
-                    Log.e("ClientSocketManager", "Read error: ${e.message}")
+                    Log.e("ClientSocketManager", "Listening error: ${e.message}")
                 }
             }
         } catch (e: Exception) {
@@ -59,18 +52,7 @@ class ClientSocketManager(private val host: String, private val port: Int) {
         }
     }
 
-    suspend fun sendMessageText(message: String) = withContext(Dispatchers.IO) {
-        val msg = ChatMessage(
-            id = "0",
-            chatGroupId = "0",
-            senderId = clientName,
-            data = MessageData(text = message),
-            timestamp = System.currentTimeMillis().toString()
-        )
-        sendMessage(msg)
-    }
-
-    suspend fun sendMessage(message: ChatMessage) = withContext(Dispatchers.IO) {
+    suspend fun sendMessage(message: Any) = withContext(Dispatchers.IO) {
         try {
             outStream?.writeObject(message)
             outStream?.flush()
@@ -79,21 +61,13 @@ class ClientSocketManager(private val host: String, private val port: Int) {
         }
     }
 
-    suspend fun sendUserInfo(user: User) = withContext(Dispatchers.IO) {
-        try {
-            outStream?.writeObject(user)
-            outStream?.flush()
-        } catch (e: Exception) {
-            Log.e("ClientSocketManager", "Send user info error: ${e.message}")
-        }
-    }
-
-    fun onReceiveMessage(message: Any) {
+    private fun onReceiveMessage(message: Any) {
         Log.d("ClientSocketManager", "Received message: $message")
-        if (message is ChatMessage)
+        if (message is ActionMessage) {
             onMessageReceived?.invoke(message)
-        else if (message is User)
-            onUserInfoReceived?.invoke(message)
+        } else {
+            Log.w("ClientSocketManager", "Received invalid message: $message")
+        }
     }
 
     fun disconnect() {

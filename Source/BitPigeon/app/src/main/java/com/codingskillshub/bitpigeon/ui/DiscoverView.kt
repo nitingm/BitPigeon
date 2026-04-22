@@ -6,26 +6,30 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import com.codingskillshub.bitpigeon.ui.composables.DiscoveredGroupEntry
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredPeerEntry
 import com.codingskillshub.bitpigeon.ui.viewmodels.DiscoverViewModel
 
 @Composable
 fun DiscoverView(
+    navController: NavController,
     discoverViewModel: DiscoverViewModel = viewModel(),
     modifier: Modifier = Modifier,
 ) {
-    val peersList by discoverViewModel.peersList.collectAsState()
+    val discoveredUsers by discoverViewModel.discoveredUsers.collectAsState()
+    val usersList = discoveredUsers.values.toList()
+    val availablePeerClients by discoverViewModel.availablePeerClients.collectAsState()
+
+    discoverViewModel.onChatGroupInvoked = { groupId ->
+        navController.navigate("chat/$groupId")
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -33,16 +37,28 @@ fun DiscoverView(
             // Adds spacing at the top and bottom of the list
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
+            if (availablePeerClients.isNotEmpty()) {
+                item {
+                    DiscoveredGroupEntry(
+                        availablePeerClients,
+                        onClick = { user ->
+                            discoverViewModel.createAndOpenDirectChat(user)
+                        }
+                    )
+                }
+            }
+
+
             // 'items' handles the recycling and lazy loading automatically
             items(
-                items = peersList,
+                items = usersList,
                 // Providing a 'key' helps Compose optimize list updates/reordering
-                key = { peer: WifiP2pDevice -> peer.deviceAddress }
-            ) { peer: WifiP2pDevice ->
+                key = { (user, device) -> device.deviceAddress }
+            ) { (user, device) ->
                 DiscoveredPeerEntry(
-                    name = peer.deviceName,
-                    statusString = peer.deviceAddress,
-                    onClick = { discoverViewModel.connectToPeer(peer) }
+                    name = user.name,
+                    statusString = "${user.email} (${device.deviceName})",
+                    onClick = { discoverViewModel.connectToPeer(device) }
                 )
             }
         }

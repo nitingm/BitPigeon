@@ -97,6 +97,7 @@ fun MainView(
                 1 -> {
                     // Page 2: Discover
                     DiscoverView(
+                        navController,
                         discoverViewModel = hiltViewModel()
                     )
                 }

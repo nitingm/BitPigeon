@@ -15,4 +15,7 @@ class AppSystemViewModel @Inject constructor(
     val isWifiEnabled = wifiService.isWifiEnabled
 
     val deviceName = wifiService.deviceName
+
+    // Service discovery
+    val discoveredUsers = wifiService.discoveredUsers
 }

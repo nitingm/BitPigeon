@@ -3,6 +3,7 @@ package com.codingskillshub.bitpigeon.domain.services
 import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
+import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
@@ -10,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
@@ -25,12 +27,13 @@ class OnlineChatService @Inject constructor(
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val _incomingMessages = MutableSharedFlow<ChatMessage>()
     val incomingMessages = _incomingMessages.asSharedFlow()
-
     private val _incomingUsers = MutableSharedFlow<User>()
     val incomingUsers = _incomingUsers.asSharedFlow()
+    private val _availablePeerClients = MutableStateFlow<List<Client>>(emptyList())
+    val availablePeerClients = _availablePeerClients.asSharedFlow()
 
-    private var serverManager: ServerSocketManager? = null
-    private var clientManager: ClientSocketManager? = null
+    private var adhocServer: AdhocServer? = null
+    private var chatClient: ChatClient? = null
 
     private var _selfUser: User = User("", "", "", "", "")
 
@@ -43,17 +46,20 @@ class OnlineChatService @Inject constructor(
             val myId = configurationService.userIdFlow.firstOrNull() ?: ""
             val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
             _selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
+            wifiCommunicationService.startServiceAdvertising(_selfUser)
             wifiCommunicationService.connectionInfo.collectLatest { info ->
                 if (info == null) {
                     stopAll()
                 } else {
                     if (info.isGroupOwner) {
                         startServer()
-
+                        wifiCommunicationService.stopServiceAdvertising()
+                        wifiCommunicationService.startServiceAdvertising(_selfUser, true)
                     } else {
                         val host = info.groupOwnerAddress?.hostAddress
                         if (host != null) {
                             startClient(host)
+                            wifiCommunicationService.stopServiceAdvertising()
                         }
                     }
                 }
@@ -62,93 +68,32 @@ class OnlineChatService @Inject constructor(
     }
 
     private fun startServer() {
-        if (serverManager == null) {
-            Log.d("OnlineChatService", "Starting ServerSocketManager on port $PORT")
+        if (adhocServer == null) {
+            Log.d("OnlineChatService", "Starting AdhocServer on port $PORT")
             // Ensure client is disconnected if we are becoming group owner
-            clientManager?.disconnect()
-            clientManager = null
-
-
-
-            serverManager = ServerSocketManager(PORT)
-            serverManager?.onMessageReceived = { message ->
-                serviceScope.launch {
-                    _incomingMessages.emit(message)
-                }
-            }
-            serverManager?.onUserInfoReceived = { user ->
-                serviceScope.launch {
-                    _incomingUsers.emit(user)
-                }
-                sendUserInfo(_selfUser)
-            }
-            serverManager?.start()
+            adhocServer = AdhocServer()
+            adhocServer?.startServer(PORT)
         }
     }
 
     private fun startClient(host: String) {
-        if (clientManager == null) {
-            Log.d("OnlineChatService", "Starting ClientSocketManager connecting to $host:$PORT")
-            // Ensure server is stopped if we are joining as client
-            serverManager?.stop()
-            serverManager = null
+        if (chatClient == null) {
+            Log.d("OnlineChatService", "Starting ChatClient connecting to $host:$PORT")
 
-            clientManager = ClientSocketManager(host, PORT)
-            clientManager?.onMessageReceived = { message ->
-                serviceScope.launch {
-                    _incomingMessages.emit(message)
+            chatClient = ChatClient(_selfUser).apply {
+                onAvailablePeerClientsUpdated = { clients ->
+                    _availablePeerClients.value = clients
                 }
             }
-            clientManager?.onUserInfoReceived = { user ->
-                serviceScope.launch {
-                    _incomingUsers.emit(user)
-                }
-            }
-            
-            serviceScope.launch {
-                try {
-                    clientManager?.connect(_selfUser)
-                } catch (e: Exception) {
-                    Log.e("OnlineChatService", "Failed to connect to group owner: ${e.message}")
-                    clientManager = null
-                }
-            }
+            chatClient?.connectToServer(host, PORT)
         }
     }
 
     private fun stopAll() {
-        Log.d("OnlineChatService", "Stopping all socket managers")
-        serverManager?.stop()
-        serverManager = null
-        clientManager?.disconnect()
-        clientManager = null
-    }
-
-    fun sendMessageOnline(message: ChatMessage) {
-        serviceScope.launch {
-            if (serverManager != null) {
-                Log.d("OnlineChatService", "Broadcasting message via ServerSocketManager")
-                serverManager?.sendMessage(message)
-            } else if (clientManager != null) {
-                Log.d("OnlineChatService", "Sending message via ClientSocketManager")
-                clientManager?.sendMessage(message)
-            } else {
-                Log.w("OnlineChatService", "No active connection to send message")
-            }
-        }
-    }
-
-    private fun sendUserInfo(user: User) {
-        serviceScope.launch {
-            if (serverManager != null) {
-                Log.d("OnlineChatService", "Broadcasting message via ServerSocketManager")
-                serverManager?.sendUserInfo(user)
-            } else if (clientManager != null) {
-                Log.d("OnlineChatService", "Sending message via ClientSocketManager")
-                clientManager?.sendUserInfo(user)
-            } else {
-                Log.w("OnlineChatService", "No active connection to send message")
-            }
-        }
+        Log.d("OnlineChatService", "Stopping all connection")
+        adhocServer?.stopServer()
+        adhocServer = null
+        chatClient?.disconnectFromServer()
+        chatClient = null
     }
 }

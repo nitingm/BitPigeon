@@ -1,27 +1,30 @@
 package com.codingskillshub.bitpigeon.infrastructure
 
 import android.util.Log
+import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.net.ServerSocket
 import java.net.Socket  
-import java.util.Collections
 import kotlinx.coroutines.*
-import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
-import com.codingskillshub.bitpigeon.domain.entities.MessageData
+import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import java.util.Collections
 
 class ServerSocketManager(private val port: Int) {
     private var serverSocket: ServerSocket? = null
     private val serverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    private data class Client(val socket: Socket,
-                              val out: ObjectOutputStream,
-                              val `in`: ObjectInputStream,
-                              val name: String)
-    private val clients = Collections.synchronizedList(mutableListOf<Client>())
-    var onMessageReceived: ((ChatMessage) -> Unit)? = null
-    var onUserInfoReceived: ((User) -> Unit)? = null
+    private data class ClientSocket(val socket: Socket,
+                                    val outputStream: ObjectOutputStream,
+                                    val inputStream: ObjectInputStream,
+                                    val name: String)
+    private val clientsMap = Collections.synchronizedMap(mutableMapOf<String, ClientSocket>())
+
+    var onMessageReceived: ((ActionMessage) -> Unit)? = null
+
+    var onClientConnected: ((Client) -> Unit)? = null
+    var onClientDisconnected: ((Client) -> Unit)? = null
 
     fun start() {
         serverScope.launch {
@@ -37,38 +40,24 @@ class ServerSocketManager(private val port: Int) {
                         val input = ObjectInputStream(socket.getInputStream())
 
                         Log.d("ServerSocketManager", "Client connected: ${socket.inetAddress.hostAddress}")
-                        // Read user info as first object (expect User)
-                        val user = input.readObject() as? User
-                        val clientName = user?.name ?: socket.inetAddress.hostAddress
-                        val client = Client(socket, out, input, clientName)
 
-                        clients.add(client)
-                        if (user != null) {
-                            onUserInfoReceived?.invoke(user)
-                        }
-                        val joinMsg = ChatMessage(
-                            id = "0",
-                            chatGroupId = "0",
-                            senderId = clientName,
-                            data = MessageData(text = "$clientName connected."),
-                            timestamp = System.currentTimeMillis().toString()
-                        )
-                        broadcast(joinMsg)
+                        // Read user info as first object
+                        val user = input.readObject()
+                        if  (user is User) {
+                            clientsMap[user.id] = ClientSocket(socket, out, input, user.name)
+                            onClientConnected?.invoke(Client(user.name, socket.inetAddress.hostAddress, socket.inetAddress.hostAddress == ss.inetAddress.hostAddress,user))
 
-                        // Start a coroutine for this client
-                        serverScope.launch {
-                            try {
-                                while (true) {
-                                    val obj = input.readObject() ?: break
-                                    if (obj is ChatMessage) {
-                                        broadcast(obj)
+                            // Start a coroutine for this client
+                            serverScope.launch {
+                                try {
+                                    while (true) {
+                                        val obj = input.readObject() ?: break
+                                        onReceiveMessage(obj)
                                     }
-                                    onReceiveMessage(obj)
+                                } catch (e: Exception) {
+                                    Log.e("ServerSocketManager", "Client read error: ${e.message}")
+                                    removeClient(user.id)
                                 }
-                            } catch (e: Exception) {
-                                // ignore read errors
-                            } finally {
-                                removeClient(client)
                             }
                         }
                     } catch (e: Exception) {
@@ -81,71 +70,58 @@ class ServerSocketManager(private val port: Int) {
         }
     }
 
-    private suspend fun removeClient(client: Client) = withContext(Dispatchers.IO) {
-        try { client.`in`.close() } catch (_: Exception) {}
-        try { client.out.close() } catch (_: Exception) {}
-        try { client.socket.close() } catch (_: Exception) {}
-        clients.remove(client)
-        val leaveMsg = ChatMessage(
-            id = "0",
-            chatGroupId = "0",
-            senderId = client.name,
-            data = MessageData(text = "${client.name} disconnected."),
-            timestamp = System.currentTimeMillis().toString()
-        )
-        broadcast(leaveMsg)
-    }
-
-    suspend fun sendMessage(message: ChatMessage) {
-        broadcast(message)
-    }
-
-    suspend fun sendUserInfo(user: User) = withContext(Dispatchers.IO) {
-        val snapshot = synchronized(clients) { clients.toList() }
-        for (c in snapshot) {
+    private suspend fun removeClient(clientId: String) = withContext(Dispatchers.IO) {
+        var client = clientsMap[clientId]
+        if (client != null) {
             try {
-                c.out.writeObject(user)
-                c.out.flush()
-            } catch (e: Exception) {
-                // ignore failures; cleanup will happen elsewhere
+                client.inputStream.close()
+            } catch (_: Exception) {
             }
+            try {
+                client.outputStream.close()
+            } catch (_: Exception) {
+            }
+            try {
+                client.socket.close()
+            } catch (_: Exception) {
+            }
+            clientsMap.remove(clientId)
         }
     }
 
-    private suspend fun broadcast(msg: ChatMessage) = withContext(Dispatchers.IO) {
-        val snapshot = synchronized(clients) { clients.toList() }
-        for (c in snapshot) {
+    suspend fun sendMessageToClient(message: ActionMessage, clientId: String) = withContext(Dispatchers.IO) {
+        val client = clientsMap[clientId]
+        if (client != null) {
             try {
-                c.out.writeObject(msg)
-                c.out.flush()
+                client.outputStream.writeObject(message)
+                client.outputStream.flush()
             } catch (e: Exception) {
-                // ignore failures; cleanup will happen elsewhere
+                Log.e("ServerSocketManager", "Send error to client $clientId: ${e.message}")
+                removeClient(clientId)
             }
-        }
-        if (clients.isEmpty()) {
-            Log.d("ServerSocketManager", "No clients connected")
+        } else {
+            Log.e("ServerSocketManager", "Client $clientId not found for sending message")
         }
     }
 
     fun onReceiveMessage(message: Any) {
         Log.d("ServerSocketManager", "Received message: $message")
-        if (message is ChatMessage)
+        if (message is ActionMessage) {
             onMessageReceived?.invoke(message)
-        else if (message is User)
-            onUserInfoReceived?.invoke(message)
+        } else {
+            Log.e("ServerSocketManager", "Received invalid message: $message")
+        }
     }
 
     fun stop() {
         serverScope.launch(Dispatchers.IO) {
-            try {
-                val snapshot = synchronized(clients) { clients.toList() }
-                snapshot.forEach { client ->
-                    try { client.`in`.close() } catch (_: Exception) {}
-                    try { client.out.close() } catch (_: Exception) {}
-                    try { client.socket.close() } catch (_: Exception) {}
-                }
-                clients.clear()
-            } catch (_: Exception) {}
+            val snapshot = synchronized(clientsMap) { clientsMap.values.toList() }
+            snapshot.forEach { client ->
+                try { client.inputStream.close() } catch (_: Exception) {}
+                try { client.outputStream.close() } catch (_: Exception) {}
+                try { client.socket.close() } catch (_: Exception) {}
+            }
+            clientsMap.clear()
             try { serverSocket?.close() } catch (_: Exception) {}
             serverScope.cancel()
             Log.d("ServerSocketManager", "Server stopped")
