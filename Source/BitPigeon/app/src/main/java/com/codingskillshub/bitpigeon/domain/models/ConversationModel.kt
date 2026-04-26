@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -42,21 +43,56 @@ class ConversationModel @Inject constructor(
     private val hashService: HashService
 ) {
     // We create a dedicated scope for the model to keep the flow active
-    private val modelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val modelScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _usersOnline = MutableSharedFlow<List<User>>()
     val usersOnline = _usersOnline.asSharedFlow()
 
+    private val _onlineGroups = MutableStateFlow<List<ChatGroup>>(emptyList())
+    val onlineGroups: StateFlow<List<ChatGroup>> = _onlineGroups.asStateFlow()
+
     init {
         modelScope.launch {
-            onlineChatService.incomingUsers.collect { user ->
-                createDirectChat(user)
+            onlineChatService.incomingNewChatGroup.collect { chatGroup ->
+                try {
+                    handleIncomingNewChatGroup(chatGroup)
+                } catch (e: Exception) {
+                    Log.e("ConversationModel", "Error handling incoming chat group: ${e.message}", e)
+                }
             }
+        }
+        modelScope.launch {
             onlineChatService.availablePeerClients.collect { clients ->
-                 _usersOnline.emit(
-                    clients.map { client ->
-                        userDao.getUserById(client.user.id).firstOrNull()
-                    }.filterNotNull()
-                )
+                Log.d("ConversationModel", "🔥 Processing ${clients.size} available clients")
+                try {
+                    // ✅ STEP 1: Save discovered users to database first
+                    clients.forEach { client ->
+                        try {
+                            Log.d("ConversationModel", "💾 Saving user to DB: ${client.user.id} - ${client.user.name}")
+                            userDao.insertOrUpdateUser(client.user)
+                        } catch (e: Exception) {
+                            Log.e("ConversationModel", "Failed to save user ${client.user.id}: ${e.message}", e)
+                        }
+                    }
+
+                    // ✅ STEP 2: Use the client.user objects directly (they're already saved)
+                    val users = clients.map { it.user }
+
+                    Log.d("ConversationModel", "✅ Processed ${users.size} users - ${users.map { it.name }}")
+                    _usersOnline.emit(users)
+
+                } catch (e: Exception) {
+                    Log.e("ConversationModel", "❌ Error processing available clients: ${e.message}", e)
+                }
+            }
+        }
+        modelScope.launch {
+            usersOnline.collect { onlineUsers ->
+                try {
+                    Log.d("ConversationModel", "🔄 Syncing online groups for ${onlineUsers.size} users")
+                    syncOnlineChatGroups(onlineUsers)
+                } catch (e: Exception) {
+                    Log.e("ConversationModel", "Error syncing online groups: ${e.message}", e)
+                }
             }
         }
     }
@@ -74,6 +110,8 @@ class ConversationModel @Inject constructor(
         } else {
             hashService.generateDirectGroupId(myId, peerUser.id)
         }
+
+        userDao.insertOrUpdateUser(peerUser)
 
         // Check if the groupId already exists and return if true
         val existingGroup = chatGroupDao.getChatGroupById(groupId).firstOrNull()
@@ -98,6 +136,8 @@ class ConversationModel @Inject constructor(
             members.add(ChatGroupMember(id = 0, chatGroupId = groupId, userId = peerUser.id))
         }
         chatGroupDao.insertMembers(members)
+
+        onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb,members))
 
         return groupDb.id
     }
@@ -130,10 +170,39 @@ class ConversationModel @Inject constructor(
         val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
         val selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
         createDirectChat(selfUser, isPersonal = true)
-        Log.d("ConversationModel", "My Personal Chat created!!!")
+        Log.i("ConversationModel", "My Personal Chat created!!!")
     }
 
     fun getChatGroupById(chatId: String): Flow<ChatGroup?> {
         return chatGroupDao.getChatGroupById(chatId)
+    }
+
+    private suspend fun handleIncomingNewChatGroup(chatGroup: ChatGroup) {
+        val existingGroup = chatGroupDao.getChatGroupById(chatGroup.group.id).firstOrNull()
+        if (existingGroup != null) {
+            return
+        }
+        chatGroupDao.insertOrUpdateChatGroup(chatGroup.group)
+        chatGroupDao.insertMembers(chatGroup.members)
+    }
+
+    // Any group containing more than 1 member online is considered an online group
+    suspend fun syncOnlineChatGroups(onlineUsers: List<User>) {
+        val onlineUserIds = onlineUsers.map { it.id }.toSet()
+
+        // Get all chat groups
+        val allGroups = chatGroupDao.getAllChatGroups().firstOrNull() ?: emptyList()
+
+        // Filter groups that contain more than 1 online user
+        val groups =  allGroups.filter { group ->
+            val onlineMemberCount = group.members.count { member ->
+                member.userId in onlineUserIds
+            }
+            onlineMemberCount > 0
+        }
+        _onlineGroups.value = groups
+
+        onlineChatService.syncOnlineChatGroups(groups)
+        Log.i("ConversationModel", "Synced online chat groups: $groups")
     }
 }

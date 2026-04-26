@@ -9,6 +9,7 @@ import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -18,9 +19,9 @@ class DiscoverViewModel @Inject constructor(
     private val onlineChatService: OnlineChatService,
     private val conversationModel: ConversationModel
 ) : ViewModel() {
-    val discoveredUsers = wifiService.discoveredUsers
+    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = wifiService.discoveredUsers
 
-    val availableClients = onlineChatService.availablePeerClients
+    val availableClients: StateFlow<List<Client>> = onlineChatService.availablePeerClients
 
     var onChatGroupInvoked: ((String) -> Unit)? = null
 

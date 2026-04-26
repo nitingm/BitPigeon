@@ -1,15 +1,17 @@
 package com.codingskillshub.bitpigeon.domain.services
 
+import android.util.Log
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
-import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
@@ -22,7 +24,12 @@ class AdhocServer {
     private val clients = CopyOnWriteArrayList<Client>()
     private val chatRooms: MutableMap<String, MutableList<Client>> = mutableMapOf()
 
-    // Dedicated background thread for this server's logic
+    private val chatGroups: MutableList<ChatGroup> = mutableListOf()
+
+    // Mutex to synchronize access to clients list
+    private val clientsMutex = Mutex()
+
+    // ...existing code...
     private val serverDispatcher =
         Executors.newSingleThreadExecutor().asCoroutineDispatcher()
     private val serverScope = CoroutineScope(serverDispatcher + SupervisorJob())
@@ -30,7 +37,7 @@ class AdhocServer {
     fun startServer(port: Int) {
         serverScope.launch {
             serverSocketManager = ServerSocketManager(port).apply {
-                onMessageReceived = { message -> handleClientRequest(message) }
+                onMessageReceived = { message, clientId -> handleClientRequest(message, clientId) }
                 onClientConnected = { client -> handleClientConnection(client) }
                 onClientDisconnected = { client -> handleClientDisconnection(client) }
                 start()
@@ -48,40 +55,62 @@ class AdhocServer {
     }
 
     private fun handleClientConnection(client: Client) {
-        clients.add(client)
         serverScope.launch {
-            sendAvailableClients(clients)
+            clientsMutex.withLock {
+                clients.add(client)
+                Log.d("AdhocServer", "Client connected: ${client.user.name}")
+                sendAvailableClientsLocked(clients.toList())
+            }
         }
     }
 
     private fun handleClientDisconnection(client: Client) {
-        clients.remove(client)
-        // Also remove from any chat rooms
-        chatRooms.forEach { (roomId, members) ->
-            members.remove(client)
-        }
         serverScope.launch {
-            sendAvailableClients(clients)
-        }
-    }
-
-    private fun handleClientRequest(message: ActionMessage) {
-        when (message.actionType) {
-            "REQUEST_CONNECTION" -> {
-                val user = message.data as User
-                relayPrivateConnectionRequest(user)
+            clientsMutex.withLock {
+                clients.remove(client)
+                Log.d("AdhocServer", "Client disconnected: ${client.user.name}")
+                // Also remove from any chat rooms
+                chatRooms.forEach { (_, members) ->
+                    members.remove(client)
+                }
+                sendAvailableClientsLocked(clients.toList())
             }
-
         }
     }
 
-    fun relayPrivateConnectionRequest(user: User) {
-
+    private fun handleClientRequest(message: ActionMessage, clientId: String) {
+        when (message.actionType) {
+            "CREATE_DIRECT_CHAT" -> {
+                relayDirectChatCreationRequest(message, clientId)
+            }
+            "SYNC_ONLINE_CHAT_GROUPS" -> {
+                @Suppress("UNCHECKED_CAST")
+                val groups = message.data as List<ChatGroup>
+                handleOnlineChatGroupsUpdate(groups, clientId)
+            }
+            "SEND_CHAT_MESSAGE" -> {
+                relayChatMessage(message, clientId)
+            }
+        }
+        Log.d("AdhocServer", "Received Client Request Message: $message")
     }
 
     fun relayGroupCreationRequest(group: ChatGroup) {
 
     }
+
+    fun relayDirectChatCreationRequest(message: ActionMessage, clientId: String) {
+        val group = message.data as ChatGroup
+        for (member in group.members) {
+            val memberClient = clients.find { it.user.id == member.userId && it.user.id != clientId }
+            if (memberClient != null) {
+                serverScope.launch {
+                    serverSocketManager?.sendMessageToClient(message, memberClient.user.id)
+                }
+            }
+        }
+    }
+
     fun sendGroupInfoUpdate() {
 
     }
@@ -91,9 +120,23 @@ class AdhocServer {
     fun relayUserInfoUpdate() {
 
     }
-    fun relayChatMessage(message: ChatMessage) {
-
+    fun relayChatMessage(message: ActionMessage, clientId: String) {
+        val chatMessage = message.data as ChatMessage
+        val roomId = chatMessage.chatGroupId
+        val roomClients = chatRooms[roomId]
+        if (roomClients != null) {
+            for (client in roomClients) {
+                if (client.user.id != clientId) {
+                    serverScope.launch {
+                        serverSocketManager?.sendMessageToClient(message, client.user.id)
+                    }
+                }
+            }
+        } else {
+            Log.e("AdhocServer", "No clients in room $roomId")
+        }
     }
+
     private suspend fun sendAvailableClients(clients: List<Client>) {
         val message = ActionMessage(
             actionType = "AVAILABLE_CLIENTS_UPDATE",
@@ -101,6 +144,55 @@ class AdhocServer {
         )
         for (client: Client in clients) {
             serverSocketManager?.sendMessageToClient(message, client.user.id)
+        }
+    }
+
+    private suspend fun sendAvailableClientsLocked(clientSnapshot: List<Client>) {
+        for (recipientClient in clientSnapshot) {
+            // Send all clients except the recipient itself
+            val otherClients = clientSnapshot.filter {
+                it.user.id != recipientClient.user.id
+            }
+
+            val message = ActionMessage(
+                actionType = "AVAILABLE_CLIENTS_UPDATE",
+                data = otherClients
+            )
+
+            serverScope.launch {
+                try {
+                    serverSocketManager?.sendMessageToClient(message, recipientClient.user.id)
+                    Log.d("AdhocServer", "Sent ${otherClients.size} available clients to ${recipientClient.user.name}")
+                } catch (e: Exception) {
+                    Log.e("AdhocServer", "Failed to send clients to ${recipientClient.user.name}: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun handleOnlineChatGroupsUpdate(chatGroups: List<ChatGroup>, clientId: String) {
+        // Get the IDs of existing groups for efficient lookup
+        val existingGroupIds = this.chatGroups.map { it.group.id }.toSet()
+
+        // Filter out groups that are already in our list
+        val newGroups = chatGroups.filter { incomingGroup ->
+            incomingGroup.group.id !in existingGroupIds
+        }
+
+        // Add the new groups to our private list
+        this.chatGroups.addAll(newGroups)
+
+        // Find the client that sent this update
+        val client = clients.find { it.user.id == clientId }
+        if (client != null) {
+            // Add this client to the chat rooms for the new groups
+            chatGroups.forEach { group ->
+                val groupId = group.group.id
+                val roomClients = chatRooms.getOrPut(groupId) { mutableListOf() }
+                if (client !in roomClients) {
+                    roomClients.add(client)
+                }
+            }
         }
     }
 }

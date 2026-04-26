@@ -34,6 +34,7 @@ fun ChatGroupListView(
 
     ChatGroupListViewContent(
         chatList = conversations,
+        onlineChatGroups = chatGroupListViewModel.onlineChatGroupsIds.collectAsStateWithLifecycle().value,
         onChatClick = { chat ->
             // Handle navigation to ChatView
             navController.navigate("chatview/${chat.group.id}")
@@ -48,6 +49,7 @@ fun ChatGroupListView(
 @Composable
 fun ChatGroupListViewContent(
     chatList: List<ChatGroup>,
+    onlineChatGroups: List<String>,
     onChatClick: (ChatGroup) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -78,6 +80,7 @@ fun ChatGroupListViewContent(
                     name = chat.group.name,
                     lastMessage = chat.lastMessage,
                     timestamp = chat.timestamp,
+                    isOnline = (chat.group.id in onlineChatGroups),
                     onClick = { onChatClick(chat) }
                 )
             }
@@ -96,9 +99,12 @@ fun ChatGroupListViewPreview() {
         ChatGroup(ChatGroupDb ("5", "BitPigeon Support", ChatGroupType.DIRECT),emptyList(), "Welcome to the app!", "20/12/2025")
     )
 
+    val sampleOnlineChats = listOf("2","3")
+
     MaterialTheme {
         ChatGroupListViewContent(
             chatList = sampleChats,
+            onlineChatGroups = sampleOnlineChats,
             onChatClick = { /* Handle navigation */ },
             onSearchClick = { /* Handle search */ }
         )

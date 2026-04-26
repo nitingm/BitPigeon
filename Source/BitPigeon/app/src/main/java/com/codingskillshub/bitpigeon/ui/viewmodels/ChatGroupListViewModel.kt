@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
-import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -24,6 +23,10 @@ class ChatGroupListViewModel @Inject constructor(
 ) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val onlineChatGroupsIds: StateFlow<List<String>> = conversationModel.onlineGroups
+        .map { chatGroups -> chatGroups.map { it.group.id } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
 
@@ -42,7 +45,7 @@ class ChatGroupListViewModel @Inject constructor(
      * Includes a special case: if query is "me", "you", or "myself",
      * it filters for groups where the current user is the only member.
      */
-    val filteredConversations: StateFlow<List<ChatGroup>> = kotlinx.coroutines.flow.combine(
+    val filteredConversations: StateFlow<List<ChatGroup>> = combine(
         conversations,
         _searchQuery
     ) { allConversations, query ->

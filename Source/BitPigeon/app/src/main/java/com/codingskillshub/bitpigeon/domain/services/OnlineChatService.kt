@@ -2,6 +2,7 @@ package com.codingskillshub.bitpigeon.domain.services
 
 import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
@@ -12,7 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -30,7 +33,13 @@ class OnlineChatService @Inject constructor(
     private val _incomingUsers = MutableSharedFlow<User>()
     val incomingUsers = _incomingUsers.asSharedFlow()
     private val _availablePeerClients = MutableStateFlow<List<Client>>(emptyList())
-    val availablePeerClients = _availablePeerClients.asSharedFlow()
+    val availablePeerClients: StateFlow<List<Client>> = _availablePeerClients.asStateFlow()
+
+    private val _incomingPeerClients = MutableSharedFlow<ChatGroup>()
+    val incomingPeerClients = _incomingPeerClients.asSharedFlow()
+
+    private val _incomingNewChatGroup = MutableSharedFlow<ChatGroup>()
+    val incomingNewChatGroup = _incomingNewChatGroup.asSharedFlow()
 
     private var adhocServer: AdhocServer? = null
     private var chatClient: ChatClient? = null
@@ -54,7 +63,15 @@ class OnlineChatService @Inject constructor(
                     if (info.isGroupOwner) {
                         startServer()
                         wifiCommunicationService.stopServiceAdvertising()
-                        wifiCommunicationService.startServiceAdvertising(_selfUser, true)
+                        wifiCommunicationService.onServiceAdvertisingChanged = { isAdvertising ->
+                            if (!isAdvertising) {
+                                wifiCommunicationService.startServiceAdvertising(_selfUser, true)
+                            }
+                        }
+                        val host = info.groupOwnerAddress?.hostAddress
+                        if (host != null) {
+                            startClient(host)
+                        }
                     } else {
                         val host = info.groupOwnerAddress?.hostAddress
                         if (host != null) {
@@ -65,6 +82,10 @@ class OnlineChatService @Inject constructor(
                 }
             }
         }
+    }
+
+    fun sendCreateDirectChatRequest(chatGroup: ChatGroup) {
+        chatClient?.createDirectChat(chatGroup)
     }
 
     private fun startServer() {
@@ -84,9 +105,27 @@ class OnlineChatService @Inject constructor(
                 onAvailablePeerClientsUpdated = { clients ->
                     _availablePeerClients.value = clients
                 }
+                onChatMessageReceived = { message ->
+                    serviceScope.launch {
+                        _incomingMessages.emit(message)
+                    }
+                }
+                onCreateDirectChat = { group ->
+                    serviceScope.launch {
+                        _incomingNewChatGroup.emit(group)
+                    }
+                }
             }
             chatClient?.connectToServer(host, PORT)
         }
+    }
+
+    fun sendMessageOnline(chatMessage: ChatMessage) {
+        chatClient?.sendChatMessage(chatMessage)
+    }
+
+    fun syncOnlineChatGroups(groups: List<ChatGroup>) {
+        chatClient?.syncChatGroupsWithServer(groups)
     }
 
     private fun stopAll() {

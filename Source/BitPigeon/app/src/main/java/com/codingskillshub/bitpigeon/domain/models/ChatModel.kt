@@ -93,7 +93,7 @@ class ChatModel @Inject constructor(
         Log.d("ChatModel","Send message: $message")
 
         if (!isPersonalChat(_activeChatGroup.value)) {
-//            onlineChatService.sendMessageOnline(message)
+            onlineChatService.sendMessageOnline(message)
         }
 
         chatDao.insertMessage(message)

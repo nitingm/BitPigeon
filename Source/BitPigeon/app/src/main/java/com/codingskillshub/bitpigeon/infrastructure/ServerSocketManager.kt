@@ -21,7 +21,7 @@ class ServerSocketManager(private val port: Int) {
                                     val name: String)
     private val clientsMap = Collections.synchronizedMap(mutableMapOf<String, ClientSocket>())
 
-    var onMessageReceived: ((ActionMessage) -> Unit)? = null
+    var onMessageReceived: ((ActionMessage, String) -> Unit)? = null
 
     var onClientConnected: ((Client) -> Unit)? = null
     var onClientDisconnected: ((Client) -> Unit)? = null
@@ -45,14 +45,14 @@ class ServerSocketManager(private val port: Int) {
                         val user = input.readObject()
                         if  (user is User) {
                             clientsMap[user.id] = ClientSocket(socket, out, input, user.name)
-                            onClientConnected?.invoke(Client(user.name, socket.inetAddress.hostAddress, socket.inetAddress.hostAddress == ss.inetAddress.hostAddress,user))
+                            onClientConnected?.invoke(Client(user.name, socket.inetAddress.hostAddress, socket.inetAddress.hostAddress == "192.168.49.1",user))
 
                             // Start a coroutine for this client
                             serverScope.launch {
                                 try {
                                     while (true) {
                                         val obj = input.readObject() ?: break
-                                        onReceiveMessage(obj)
+                                        onReceiveMessage(obj, user.id)
                                     }
                                 } catch (e: Exception) {
                                     Log.e("ServerSocketManager", "Client read error: ${e.message}")
@@ -104,10 +104,10 @@ class ServerSocketManager(private val port: Int) {
         }
     }
 
-    fun onReceiveMessage(message: Any) {
+    fun onReceiveMessage(message: Any, clientId: String) {
         Log.d("ServerSocketManager", "Received message: $message")
         if (message is ActionMessage) {
-            onMessageReceived?.invoke(message)
+            onMessageReceived?.invoke(message, clientId)
         } else {
             Log.e("ServerSocketManager", "Received invalid message: $message")
         }

@@ -30,15 +30,21 @@ class ClientSocketManager() {
             inStream = input
             
             running = true
+            var readErrorCount = 0
             listeningJob = clientScope.launch {
                 try {
                     while (running) {
                         try {
                             val obj = input.readObject() ?: break
                             onReceiveMessage(obj)
+                            readErrorCount = 0
                         } catch (e: Exception) {
                             Log.e("ClientSocketManager", "Read error: ${e.message}")
                             // Continue reading in case of stream corruption
+                            readErrorCount++
+                            if(readErrorCount > 5) {
+                                disconnect()
+                            }
                         }
                     }
                     Log.d("ClientSocketManager", "Listening stopped")
@@ -71,6 +77,7 @@ class ClientSocketManager() {
     }
 
     fun disconnect() {
+        Log.i("ClientSocketManager", "Disconnecting")
         running = false
         clientScope.launch(Dispatchers.IO) {
             try { listeningJob?.cancel() } catch (_: Exception) {}

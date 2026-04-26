@@ -25,10 +25,10 @@ fun DiscoverView(
 ) {
     val discoveredUsers by discoverViewModel.discoveredUsers.collectAsState()
     val usersList = discoveredUsers.values.toList()
-    val availablePeerClients by discoverViewModel.availablePeerClients.collectAsState()
+    val availablePeerClients by discoverViewModel.availableClients.collectAsState()
 
     discoverViewModel.onChatGroupInvoked = { groupId ->
-        navController.navigate("chat/$groupId")
+        navController.navigate("chatview/$groupId")
     }
 
     Column(modifier = modifier.fillMaxSize()) {

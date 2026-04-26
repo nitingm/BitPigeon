@@ -16,6 +16,7 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
+import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -68,13 +69,15 @@ class WifiCommunicationService @Inject constructor(
     private var isServiceAdvertising = false
     private var isServiceDiscoveryActive = false
 
+    var onServiceAdvertisingChanged: ((Boolean) -> Unit)? = null
+
     fun updateWifiStatus(enabled: Boolean) {
         // 3. Updating the value automatically emits a signal to all collectors
         _isWifiEnabled.value = enabled
 
         if (enabled) {
             if (hasWifiDirectPermissions()) {
-                discoverPeers()
+//                discoverPeers()
                 startServiceDiscovery()
             } else {
                 Log.w("WifiCommService", "Skipping discovery: Permissions not yet granted.")
@@ -92,11 +95,11 @@ class WifiCommunicationService @Inject constructor(
         if (hasWifiDirectPermissions()) {
             manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
-                    Log.d("WifiCommService", "Discovery Started Successfully")
+                    Log.d("WifiCommService", "Peer Discovery Started Successfully")
                 }
 
                 override fun onFailure(reason: Int) {
-                    Log.e("WifiCommService", "Discovery Failed: $reason")
+                    Log.e("WifiCommService", "Peer Discovery Failed: $reason")
                 }
             })
         }
@@ -121,6 +124,11 @@ class WifiCommunicationService @Inject constructor(
             manager.requestConnectionInfo(channel) { info ->
                 _connectionInfo.value = info
                 Log.d("WifiCommService", "Connected. Group Owner: ${info.isGroupOwner}, IP: ${info.groupOwnerAddress?.hostAddress}")
+                if (info.isGroupOwner) {
+                    _deviceAddress.value = info.groupOwnerAddress?.hostAddress ?: "192.168.49.1"
+                } else {
+                    stopServiceAdvertising()
+                }
             }
         } else {
             _connectionInfo.value = null
@@ -158,6 +166,11 @@ class WifiCommunicationService @Inject constructor(
 
     @SuppressLint("MissingPermission")
     private fun doConnect(device: WifiP2pDevice) {
+        // Check device is available
+        if (device.status != WifiP2pDevice.AVAILABLE) {
+            Log.e("WifiCommService", "Device ${device.deviceName} not available. Status: ${device.status}")
+            return
+        }
         val config = WifiP2pConfig().apply {
             deviceAddress = device.deviceAddress
         }
@@ -221,6 +234,7 @@ class WifiCommunicationService @Inject constructor(
         manager.removeLocalService(channel, serviceInfo, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 isServiceAdvertising = false
+                onServiceAdvertisingChanged?.invoke(isServiceAdvertising)
                 Log.d("WifiCommService", "Service advertising stopped successfully")
             }
 
