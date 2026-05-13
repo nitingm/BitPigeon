@@ -6,7 +6,7 @@ import java.io.Serializable
 
 data class MessageData(
     val text: String,
-    val attachments: List<String> = emptyList()
+    val attachmentIds: List<String> = emptyList()
 ) : Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L
@@ -26,10 +26,11 @@ data class ChatMessage(
     }
 }
 
-data class ChatMessageUIExtented(
+data class ChatMessageUIExtended(
     val message: ChatMessage,
     val userName: String,
     val isSentByMe: Boolean,
     val isDelivered: Boolean,
-    val isRead: Boolean
+    val isRead: Boolean,
+    val attachmentPreviewData: List<AttachmentPreviewData> = emptyList()
 )

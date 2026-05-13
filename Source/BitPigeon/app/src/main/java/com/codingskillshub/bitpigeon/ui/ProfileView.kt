@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
@@ -29,11 +30,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -75,10 +73,12 @@ fun ProfileViewContent(
     statusLabel: String,
     onEditClick: () -> Unit,
 ) {
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(scrollState)
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -126,7 +126,7 @@ fun ProfileViewContent(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // --- NEW HEADER SECTION ---
+                // --- HEADER SECTION ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -153,7 +153,7 @@ fun ProfileViewContent(
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                 )
-                // --- END HEADER SECTION ---
+                
                 ProfileItem(label = "Name", value = userName, icon = Icons.Default.Person)
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
@@ -219,6 +219,5 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
 @Preview
 @Composable
 fun ProfileViewPreview() {
-    ProfileViewContent("John Doe", "123-456-789", "john.c.calhoun@examplepetstore.com","Hey there", onEditClick = {})
-
+    ProfileViewContent("John Doe", "123-456-789", "john.doe@example.com","Hey there", onEditClick = {})
 }

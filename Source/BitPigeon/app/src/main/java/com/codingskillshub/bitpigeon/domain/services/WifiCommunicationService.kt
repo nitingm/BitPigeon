@@ -20,11 +20,17 @@ import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 @Singleton
 class WifiCommunicationService @Inject constructor(
@@ -68,6 +74,8 @@ class WifiCommunicationService @Inject constructor(
     private var serviceRequest: WifiP2pDnsSdServiceRequest? = null
     private var isServiceAdvertising = false
     private var isServiceDiscoveryActive = false
+
+    private val refreshMutex = Mutex()
 
     var onServiceAdvertisingChanged: ((Boolean) -> Unit)? = null
 
@@ -329,6 +337,123 @@ class WifiCommunicationService @Inject constructor(
                 }
             })
         }
+    }
+
+    /**
+     * Sequential (suspend) version of stopServiceDiscovery to ensure it finishes before starting again.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun stopServiceDiscoverySuspend(): Boolean = suspendCancellableCoroutine { cont ->
+        if (!isServiceDiscoveryActive) {
+            cont.resume(true)
+            return@suspendCancellableCoroutine
+        }
+
+        serviceRequest?.let { request ->
+            manager.removeServiceRequest(channel, request, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    isServiceDiscoveryActive = false
+                    serviceRequest = null
+                    _discoveredServices.value = emptyMap()
+                    _discoveredUsers.value = emptyMap()
+                    Log.d("WifiCommService", "Stop discovery successful (suspend)")
+                    if (cont.isActive) cont.resume(true)
+                }
+
+                override fun onFailure(reason: Int) {
+                    Log.e("WifiCommService", "Stop discovery failed (suspend): $reason")
+                    if (cont.isActive) cont.resume(false)
+                }
+            })
+        } ?: run {
+            if (cont.isActive) cont.resume(true)
+        }
+    }
+
+    /**
+     * Sequential (suspend) version of startServiceDiscovery.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun startServiceDiscoverySuspend(): Boolean = suspendCancellableCoroutine { cont ->
+        if (isServiceDiscoveryActive) {
+            cont.resume(true)
+            return@suspendCancellableCoroutine
+        }
+
+        // Set up service response listeners
+        manager.setDnsSdResponseListeners(channel,
+            { instanceName, registrationType, device ->
+                if (instanceName == SERVICE_NAME && registrationType == SERVICE_TYPE) {
+                    val currentServices = _discoveredServices.value.toMutableMap()
+                    currentServices[device.deviceAddress] = device
+                    _discoveredServices.value = currentServices
+                }
+            },
+            { fullDomainName, txtRecordMap, device ->
+                val userInfoJson = txtRecordMap["userInfo"]
+                if (userInfoJson != null) {
+                    try {
+                        val gson = Gson()
+                        val user = gson.fromJson(userInfoJson, User::class.java)
+                        val currentUsers = _discoveredUsers.value.toMutableMap()
+                        currentUsers[device.deviceAddress] = Pair(user, device)
+                        _discoveredUsers.value = currentUsers
+                    } catch (e: Exception) {
+                        Log.e("WifiCommService", "Failed to parse user info: ${e.message}")
+                    }
+                }
+            }
+        )
+
+        serviceRequest = WifiP2pDnsSdServiceRequest.newInstance()
+        manager.addServiceRequest(channel, serviceRequest!!, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                manager.discoverServices(channel, object : WifiP2pManager.ActionListener {
+                    override fun onSuccess() {
+                        isServiceDiscoveryActive = true
+                        Log.d("WifiCommService", "Start discovery successful (suspend)")
+                        if (cont.isActive) cont.resume(true)
+                    }
+
+                    override fun onFailure(reason: Int) {
+                        Log.e("WifiCommService", "Discover services failed (suspend): $reason")
+                        if (cont.isActive) cont.resume(false)
+                    }
+                })
+            }
+
+            override fun onFailure(reason: Int) {
+                Log.e("WifiCommService", "Add service request failed (suspend): $reason")
+                if (cont.isActive) cont.resume(false)
+            }
+        })
+    }
+
+    /**
+     * Backend refresh logic: Sequential stop then start discovery.
+     */
+    suspend fun refreshDiscovery() = refreshMutex.withLock {
+        if (!hasWifiDirectPermissions()) {
+            Log.w("WifiCommService", "Refresh failed: Missing permissions")
+            return@withLock
+        }
+
+        // 1. Sequentially stop existing discovery and wait for callback
+        stopServiceDiscoverySuspend()
+        
+        // 2. Clear current lists
+        _discoveredServices.value = emptyMap()
+        _discoveredUsers.value = emptyMap()
+
+        // 3. Sequentially restart discovery and wait for callback
+        startServiceDiscoverySuspend()
+
+        // 4. Give discovery some time to populate results
+        withTimeoutOrNull(5000) {
+            delay(3000) 
+        }
+        
+        Log.d("WifiCommService", "Refresh cycle completed")
     }
 
     private fun hasWifiDirectPermissions(): Boolean {

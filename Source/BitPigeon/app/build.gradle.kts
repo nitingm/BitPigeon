@@ -80,5 +80,7 @@ dependencies {
     // Optional: Test helpers
     testImplementation("androidx.room:room-testing:$room_version")
 
+    // Coil for image loading
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network)
 }
-

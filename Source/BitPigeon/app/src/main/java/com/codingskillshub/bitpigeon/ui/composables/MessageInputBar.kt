@@ -29,9 +29,12 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun MessageInputBar(
-    onSendMessage: (String) -> Unit = {}
+    onSendMessage: (String) -> Unit = {},
+    onAttachButtonClicked: () -> Unit = {}
 ) {
     var textState by remember { mutableStateOf("") }
+
+
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -45,7 +48,7 @@ fun MessageInputBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Attachment Button
-            IconButton(onClick = { /* Handle Attachments */ }) {
+            IconButton(onClick = { onAttachButtonClicked() }) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Attach File",

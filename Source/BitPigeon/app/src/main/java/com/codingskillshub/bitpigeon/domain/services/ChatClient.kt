@@ -23,11 +23,16 @@ class ChatClient(
     var onAvailablePeerClientsUpdated: ((List<Client>) -> Unit)? = null
     var onCreateDirectChat: ((ChatGroup) -> Unit)? = null
     var onChatMessageReceived: ((ChatMessage) -> Unit)? = null
+    var onServerDisconnection: (() -> Unit)? = null
+
 
     init {
         clientSocketManager = ClientSocketManager()
         clientSocketManager?.onMessageReceived = { message ->
             handleReceivedMessage(message)
+        }
+        clientSocketManager?.onDisconnected = {
+            handleServerDisconnection()
         }
     }
 
@@ -104,5 +109,10 @@ class ChatClient(
 
     private fun handleIncomingChatMessage(chatMessage: ChatMessage) {
         onChatMessageReceived?.invoke(chatMessage)
+    }
+
+    private fun handleServerDisconnection() {
+        Log.d("ChatClient", "Server disconnected")
+        onServerDisconnection?.invoke()
     }
 }

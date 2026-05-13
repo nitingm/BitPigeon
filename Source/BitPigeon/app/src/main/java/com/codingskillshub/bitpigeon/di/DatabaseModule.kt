@@ -9,6 +9,7 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
 import com.codingskillshub.bitpigeon.domain.interfaces.BitPigeonDatabase
+import com.codingskillshub.bitpigeon.domain.interfaces.dao.AttachmentDao
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatDao
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatGroupDao
@@ -25,7 +26,8 @@ object DatabaseModule {
             context,
             BitPigeonDatabase::class.java,
             "bitpigeon_db"
-        ).build()
+        ).fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
@@ -36,4 +38,7 @@ object DatabaseModule {
 
     @Provides
     fun provideChatGroupDao(db: BitPigeonDatabase): ChatGroupDao = db.chatGroupDao()
+
+    @Provides
+    fun provideAttachmentDao(db: BitPigeonDatabase): AttachmentDao = db.attachmentDao()
 }

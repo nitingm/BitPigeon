@@ -1,5 +1,6 @@
 package com.codingskillshub.bitpigeon.ui.composables
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 
 @Composable
 fun MessageBubble(
@@ -36,7 +38,7 @@ fun MessageBubble(
     timestamp: String, // Expected in hh:mm format
     isSentByMe: Boolean,
     showHeader: Boolean = true,
-    imageThumbnails: List<Int> = emptyList(), // Resource IDs for images
+    imageThumbnails: List<AttachmentPreviewData> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     // 1. Alignment Logic: Sent = End (Right), Received = Start (Left)
@@ -91,19 +93,18 @@ fun MessageBubble(
                 if (imageThumbnails.isNotEmpty()) {
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(bottom = 4.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 4.dp)
                     ) {
-                        items(imageThumbnails) { _ ->
-                            // Placeholder for thumbnail (icon or empty box)
-                            Box(
-                                modifier = Modifier
-                                    .size(60.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Gray.copy(alpha = 0.3f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("🖼️", fontSize = 20.sp) // Emoji placeholder
-                            }
+                        items(imageThumbnails, key = { it.fileUri.toString() }) { attachmentData ->
+                            AttachmentPreviewEntry(
+                                fileName = attachmentData.fileName,
+                                fileType = attachmentData.fileType,
+                                fileUri = attachmentData.fileUri.toString(),
+                                viewType = ViewType.GRID,
+                                showFileName = false
+                            )
                         }
                     }
                 }
@@ -132,6 +133,32 @@ fun MessageBubble(
 @Preview(showBackground = true)
 @Composable
 fun MessageBubblePreview() {
+    val dummyAttachmentPreviewData = listOf(
+        AttachmentPreviewData(
+            id = "",
+            fileName = "photo.jpg",
+            fileType = "image/jpeg",
+            fileUri = Uri.parse("content://com.example/photo.jpg")
+        ),
+        AttachmentPreviewData(
+            id = "",
+            fileName = "document.pdf",
+            fileType = "application/pdf",
+            fileUri = Uri.parse("content://com.example/document.pdf")
+        ),
+        AttachmentPreviewData(
+            id = "",
+            fileName = "photo.jpg",
+            fileType = "image/jpeg",
+            fileUri = Uri.parse("content://com.example/photo.jpg")
+        ),
+        AttachmentPreviewData(
+            id = "",
+            fileName = "document.pdf",
+            fileType = "application/pdf",
+            fileUri = Uri.parse("content://com.example/document.pdf")
+        )
+    )
     MaterialTheme {
         Column(modifier = Modifier
             .fillMaxSize()
@@ -141,7 +168,7 @@ fun MessageBubblePreview() {
                 messageText = "Check out these screenshots 🚀",
                 timestamp = "14:20",
                 isSentByMe = false,
-                imageThumbnails = listOf(1, 2)
+                imageThumbnails = dummyAttachmentPreviewData
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -155,4 +182,3 @@ fun MessageBubblePreview() {
         }
     }
 }
-

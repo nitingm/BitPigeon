@@ -39,7 +39,7 @@ class AdhocServer {
             serverSocketManager = ServerSocketManager(port).apply {
                 onMessageReceived = { message, clientId -> handleClientRequest(message, clientId) }
                 onClientConnected = { client -> handleClientConnection(client) }
-                onClientDisconnected = { client -> handleClientDisconnection(client) }
+                onClientDisconnected = { clientId -> handleClientDisconnection(clientId) }
                 start()
             }
         }
@@ -58,20 +58,21 @@ class AdhocServer {
         serverScope.launch {
             clientsMutex.withLock {
                 clients.add(client)
-                Log.d("AdhocServer", "Client connected: ${client.user.name}")
+                Log.d("AdhocServer", "Client connected: ${client.user}")
                 sendAvailableClientsLocked(clients.toList())
             }
         }
     }
 
-    private fun handleClientDisconnection(client: Client) {
+    private fun handleClientDisconnection(clientId: String) {
         serverScope.launch {
             clientsMutex.withLock {
-                clients.remove(client)
-                Log.d("AdhocServer", "Client disconnected: ${client.user.name}")
+                val disconnectedClient = clients.find { it.user.id == clientId }
+                clients.remove(disconnectedClient)
+                Log.d("AdhocServer", "Client disconnected: ${disconnectedClient?.user}")
                 // Also remove from any chat rooms
                 chatRooms.forEach { (_, members) ->
-                    members.remove(client)
+                    members.remove(disconnectedClient)
                 }
                 sendAvailableClientsLocked(clients.toList())
             }

@@ -1,21 +1,29 @@
 package com.codingskillshub.bitpigeon.ui
 
-import androidx.compose.foundation.layout.*
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.room.PrimaryKey
+import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
-import com.codingskillshub.bitpigeon.domain.entities.ChatMessageUIExtented
+import com.codingskillshub.bitpigeon.domain.entities.ChatMessageUIExtended
 import com.codingskillshub.bitpigeon.domain.entities.MessageData
+import com.codingskillshub.bitpigeon.ui.composables.AttachmentPreviewBanner
 
 import com.codingskillshub.bitpigeon.ui.composables.MessageInputBar
 import com.codingskillshub.bitpigeon.ui.composables.MessageBubble
@@ -32,11 +40,30 @@ fun ChatView(
     val messages by chatViewModel.messages.collectAsState()
     val chatGroup by chatViewModel.chatGroup.collectAsState()
 
+    val attachmentUris = remember { mutableStateListOf<Uri>() }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris: List<Uri> ->
+        attachmentUris.addAll(uris)
+    }
+
     ChatViewContent(
         chatPartnerName = chatGroup?.group?.name?: "Unknown",
         messages = messages,
-        onSendMessage = {
-            messageText -> chatViewModel.sendMessage(messageText)
+        attachedItems = chatViewModel.getAttachedItems(attachmentUris),
+        onSendMessage = { messageText -> run {
+                if (attachmentUris.isEmpty()) {
+                    chatViewModel.sendMessage(messageText)
+                } else {
+                    // Handle attachment sending
+                    chatViewModel.sendMessageWithAttachment(messageText, attachmentUris.toList())
+                }
+                attachmentUris.clear()
+            }
+        },
+        onAttachClick = {
+            filePickerLauncher.launch("*/*")
         },
         onBackClick = {
             navController.popBackStack()
@@ -48,8 +75,10 @@ fun ChatView(
 @Composable
 fun ChatViewContent(
     chatPartnerName: String,
-    messages: List<ChatMessageUIExtented>,
+    messages: List<ChatMessageUIExtended>,
+    attachedItems: List<AttachmentPreviewData>,
     onSendMessage: (String) -> Unit,
+    onAttachClick: () -> Unit,
     onBackClick: () -> Unit
 ) {
     // List state to handle auto-scrolling or scroll position
@@ -76,7 +105,15 @@ fun ChatViewContent(
         bottomBar = {
             // Padding used to prevent keyboard overlap in modern Android
             Column(modifier = Modifier.imePadding()) {
-                MessageInputBar(onSendMessage = { text -> onSendMessage(text)})
+                if (attachedItems.isNotEmpty()) {
+                    AttachmentPreviewBanner(
+                        attachedItems = attachedItems
+                    )
+                }
+                MessageInputBar(
+                    onSendMessage = { text -> onSendMessage(text) },
+                    onAttachButtonClicked = { onAttachClick() }
+                )
             }
         }
     ) { innerPadding ->
@@ -100,7 +137,8 @@ fun ChatViewContent(
                     timestamp = message.message.timestamp,
                     isSentByMe = message.isSentByMe,
                     // Only show header if it's the first message or sender changed
-                    showHeader = !message.isSentByMe
+                    showHeader = !message.isSentByMe,
+                    imageThumbnails = message.attachmentPreviewData
                 )
             }
         }
@@ -110,8 +148,22 @@ fun ChatViewContent(
 @Preview(showBackground = true)
 @Composable
 fun ChatViewPreview() {
+    val dummyAttachmentPreviewData = listOf(
+        AttachmentPreviewData(
+            id = "",
+            fileName = "file.txt",
+            fileType = "text/plain",
+            fileUri = Uri.parse("https://example.com/file.txt")
+        ),
+        AttachmentPreviewData(
+            id = "",
+            fileName = "image.jpg",
+            fileType = "image/jpeg",
+            fileUri = Uri.parse("https://example.com/image.jpg")
+        )
+    )
     val dummyMessages = listOf(
-        ChatMessageUIExtented(
+        ChatMessageUIExtended(
             ChatMessage(
                 "1",
                 "2",
@@ -124,7 +176,7 @@ fun ChatViewPreview() {
             true,
             true
         ),
-        ChatMessageUIExtented(
+        ChatMessageUIExtended(
             ChatMessage(
                 "1",
                 "2",
@@ -137,7 +189,7 @@ fun ChatViewPreview() {
             true,
             false
         ),
-        ChatMessageUIExtented(
+        ChatMessageUIExtended(
             ChatMessage(
                 "1",
                 "2",
@@ -150,7 +202,7 @@ fun ChatViewPreview() {
             false,
             false
         ),
-        ChatMessageUIExtented(
+        ChatMessageUIExtended(
             ChatMessage(
                 "1",
                 "2",
@@ -168,6 +220,8 @@ fun ChatViewPreview() {
     ChatViewContent(
         chatPartnerName = "Aman Gupta",
         messages = dummyMessages,
+        dummyAttachmentPreviewData,
+        {},
         {},
         {}
     )

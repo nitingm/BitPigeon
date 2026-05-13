@@ -1,6 +1,7 @@
 package com.codingskillshub.bitpigeon.domain.models
 
 import android.R.id.message
+import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.autofill.ContentDataType
 import com.codingskillshub.bitpigeon.common.ConfigurationService
@@ -33,6 +34,7 @@ class ChatModel @Inject constructor(
     private val chatDao: ChatDao,
     val onlineChatService: OnlineChatService,
     private val hashService: HashService,
+    private val attachmentModel: AttachmentModel,
     private val appSystemModel: AppSystemModel,
     private val userDao: UserDao,
     private val configurationService: ConfigurationService
@@ -89,6 +91,32 @@ class ChatModel @Inject constructor(
             data = MessageData(messageText),
             timestamp = timestamp
         )
+
+        Log.d("ChatModel","Send message: $message")
+
+        if (!isPersonalChat(_activeChatGroup.value)) {
+            onlineChatService.sendMessageOnline(message)
+        }
+
+        chatDao.insertMessage(message)
+    }
+
+    suspend fun sendMessageWithAttachment(messageText: String, chatId: String, uris: List<Uri>) {
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+
+        val uniqueId = hashService.generateMessageId(messageText, appSystemModel.getMyUserId(),timestamp)
+
+        val attachmentIds = attachmentModel.sendAttachments(uris,uniqueId, chatId, isPersonalChat(_activeChatGroup.value))
+
+        val message = ChatMessage(
+            id = uniqueId,
+            chatGroupId = chatId,
+            senderId = appSystemModel.getMyUserId(),
+            data = MessageData(messageText, attachmentIds),
+            timestamp = timestamp
+        )
+
+
 
         Log.d("ChatModel","Send message: $message")
 

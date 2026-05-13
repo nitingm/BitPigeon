@@ -115,6 +115,10 @@ class OnlineChatService @Inject constructor(
                         _incomingNewChatGroup.emit(group)
                     }
                 }
+                onServerDisconnection = {
+                    _availablePeerClients.value = emptyList()
+                    wifiCommunicationService.startServiceAdvertising(_selfUser)
+                }
             }
             chatClient?.connectToServer(host, PORT)
         }

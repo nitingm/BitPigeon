@@ -9,7 +9,9 @@ import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -23,6 +25,12 @@ class DiscoverViewModel @Inject constructor(
 
     val availableClients: StateFlow<List<Client>> = onlineChatService.availablePeerClients
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private var lastRefreshTime: Long = 0
+    private val refreshDebounceMs = 5000L
+
     var onChatGroupInvoked: ((String) -> Unit)? = null
 
     fun connectToPeer(peer: WifiP2pDevice) {
@@ -35,6 +43,25 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             val groupId = conversationModel.createDirectChat(user)
             onChatGroupInvoked?.invoke(groupId)
+        }
+    }
+
+    fun refresh() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastRefreshTime < refreshDebounceMs) {
+            return
+        }
+        
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                lastRefreshTime = currentTime
+                wifiService.refreshDiscovery()
+            } catch (e: Exception) {
+                // Handle error (e.g., log it)
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 }

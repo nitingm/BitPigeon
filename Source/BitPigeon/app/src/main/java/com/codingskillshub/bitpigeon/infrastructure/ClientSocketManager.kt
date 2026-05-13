@@ -9,6 +9,8 @@ import kotlinx.coroutines.*
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.MessageData
 import com.codingskillshub.bitpigeon.domain.entities.User
+import java.io.EOFException
+import java.io.IOException
 
 class ClientSocketManager() {
     private var socket: Socket? = null
@@ -19,10 +21,12 @@ class ClientSocketManager() {
     @Volatile private var running = false
 
     var onMessageReceived: ((ActionMessage) -> Unit)? = null
+    var onDisconnected: (() -> Unit)? = null
 
     suspend fun connect(host: String, port: Int) = withContext(Dispatchers.IO) {
         try {
             val s = Socket(host, port)
+            s.keepAlive = true
             socket = s
             val out = ObjectOutputStream(s.getOutputStream())
             outStream = out
@@ -30,26 +34,26 @@ class ClientSocketManager() {
             inStream = input
             
             running = true
-            var readErrorCount = 0
             listeningJob = clientScope.launch {
                 try {
                     while (running) {
                         try {
+                            // readObject throws EOFException if peer closes connection
                             val obj = input.readObject() ?: break
                             onReceiveMessage(obj)
-                            readErrorCount = 0
-                        } catch (e: Exception) {
-                            Log.e("ClientSocketManager", "Read error: ${e.message}")
-                            // Continue reading in case of stream corruption
-                            readErrorCount++
-                            if(readErrorCount > 5) {
-                                disconnect()
-                            }
+                        } catch (e: EOFException) {
+                            Log.d("ClientSocketManager", "Peer closed connection gracefully.")
+                            break
+                        } catch (e: IOException) {
+                            Log.e("ClientSocketManager", "Connection lost: ${e.message}")
+                            break
                         }
                     }
                     Log.d("ClientSocketManager", "Listening stopped")
                 } catch (e: Exception) {
                     Log.e("ClientSocketManager", "Listening error: ${e.message}")
+                } finally {
+                    disconnect()
                 }
             }
         } catch (e: Exception) {
@@ -59,11 +63,34 @@ class ClientSocketManager() {
     }
 
     suspend fun sendMessage(message: Any) = withContext(Dispatchers.IO) {
+        if (!running) return@withContext
         try {
             outStream?.writeObject(message)
             outStream?.flush()
+        } catch (e: IOException) {
+            Log.e("ClientSocketManager", "Send error (Broken pipe): ${e.message}")
+            disconnect() // Peer went offline
         } catch (e: Exception) {
             Log.e("ClientSocketManager", "Send error: ${e.message}")
+        }
+    }
+
+    suspend fun sendBytes(buffer: ByteArray, bufferSize: Int, toSend: Int) = withContext(Dispatchers.IO) {
+        try {
+            outStream?.write(buffer, 0, toSend)
+        } catch (e: IOException) {
+            Log.e("ClientSocketManager", "Byte send error: ${e.message}")
+            disconnect()
+        } catch (e: Exception) {
+            Log.e("ClientSocketManager", "Generic send error: ${e.message}")
+        }
+    }
+
+    fun flushBuffer() {
+        try {
+            outStream?.flush()
+        } catch (e: Exception) {
+            Log.e("ClientSocketManager", "Flush error: ${e.message}")
         }
     }
 
@@ -77,14 +104,21 @@ class ClientSocketManager() {
     }
 
     fun disconnect() {
-        Log.i("ClientSocketManager", "Disconnecting")
+        if (!running && socket == null) return
+
+        Log.i("ClientSocketManager", "Disconnecting and cleaning up...")
         running = false
-        clientScope.launch(Dispatchers.IO) {
+
+        // Notify higher layers immediately
+        onDisconnected?.invoke()
+
+        // Close resources in background to avoid blocking the caller
+        CoroutineScope(Dispatchers.IO).launch {
             try { listeningJob?.cancel() } catch (_: Exception) {}
             try { inStream?.close() } catch (_: Exception) {}
             try { outStream?.close() } catch (_: Exception) {}
             try { socket?.close() } catch (_: Exception) {}
-            clientScope.cancel()
+            socket = null
         }
     }
 }

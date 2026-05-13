@@ -193,7 +193,7 @@ class ConversationModel @Inject constructor(
         // Get all chat groups
         val allGroups = chatGroupDao.getAllChatGroups().firstOrNull() ?: emptyList()
 
-        // Filter groups that contain more than 1 online user
+        // Filter groups that contain at least 1 online friend
         val groups =  allGroups.filter { group ->
             val onlineMemberCount = group.members.count { member ->
                 member.userId in onlineUserIds
