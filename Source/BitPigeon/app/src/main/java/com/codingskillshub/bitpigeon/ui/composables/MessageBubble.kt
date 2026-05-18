@@ -21,6 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,9 +42,24 @@ fun MessageBubble(
     timestamp: String, // Expected in hh:mm format
     isSentByMe: Boolean,
     showHeader: Boolean = true,
+    showDate: Boolean = false,
+    date: String = "",
     imageThumbnails: List<AttachmentPreviewData> = emptyList(),
     modifier: Modifier = Modifier
 ) {
+    // State to track which attachment is being viewed in the overlay
+    var selectedAttachment by remember { mutableStateOf<AttachmentPreviewData?>(null) }
+
+    // Show the overlay if an attachment is selected
+    selectedAttachment?.let { attachment ->
+        ImageViewOverlay(
+            fileName = attachment.fileName,
+            fileType = attachment.fileType,
+            fileUri = attachment.fileUri.toString(),
+            onDismiss = { selectedAttachment = null }
+        )
+    }
+
     // 1. Alignment Logic: Sent = End (Right), Received = Start (Left)
     val horizontalAlignment = if (isSentByMe) Alignment.End else Alignment.Start
     val bubbleColor =
@@ -54,6 +73,22 @@ fun MessageBubble(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalAlignment = horizontalAlignment
     ) {
+        if (showDate) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(vertical = 8.dp)
+            ) {
+                Text(
+                    text = date,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
+        }
         // 2. Header (Sender Name and Role/Status)
         if (showHeader) {
             Row(
@@ -97,13 +132,19 @@ fun MessageBubble(
                             .fillMaxWidth()
                             .padding(bottom = 4.dp)
                     ) {
-                        items(imageThumbnails, key = { it.fileUri.toString() }) { attachmentData ->
+                        // Changed key from fileUri.toString() to id to ensure uniqueness and stability
+                        items(imageThumbnails, key = { it.id }) { attachmentData ->
                             AttachmentPreviewEntry(
                                 fileName = attachmentData.fileName,
                                 fileType = attachmentData.fileType,
                                 fileUri = attachmentData.fileUri.toString(),
                                 viewType = ViewType.GRID,
-                                showFileName = false
+                                showFileName = false,
+                                isTransferring = attachmentData.isTransferring,
+                                progress = attachmentData.progress,
+                                onClick = {
+                                    selectedAttachment = attachmentData
+                                }
                             )
                         }
                     }
@@ -135,28 +176,28 @@ fun MessageBubble(
 fun MessageBubblePreview() {
     val dummyAttachmentPreviewData = listOf(
         AttachmentPreviewData(
-            id = "",
+            id = "1",
             fileName = "photo.jpg",
             fileType = "image/jpeg",
-            fileUri = Uri.parse("content://com.example/photo.jpg")
+            fileUri = Uri.parse("content://com.example/photo1.jpg")
         ),
         AttachmentPreviewData(
-            id = "",
+            id = "2",
             fileName = "document.pdf",
             fileType = "application/pdf",
-            fileUri = Uri.parse("content://com.example/document.pdf")
+            fileUri = Uri.parse("content://com.example/document1.pdf")
         ),
         AttachmentPreviewData(
-            id = "",
+            id = "3",
             fileName = "photo.jpg",
             fileType = "image/jpeg",
-            fileUri = Uri.parse("content://com.example/photo.jpg")
+            fileUri = Uri.parse("content://com.example/photo2.jpg")
         ),
         AttachmentPreviewData(
-            id = "",
+            id = "4",
             fileName = "document.pdf",
             fileType = "application/pdf",
-            fileUri = Uri.parse("content://com.example/document.pdf")
+            fileUri = Uri.parse("content://com.example/document2.pdf")
         )
     )
     MaterialTheme {

@@ -6,23 +6,27 @@ import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import com.codingskillshub.bitpigeon.domain.entities.Attachment
-import com.codingskillshub.bitpigeon.domain.entities.TransferStatus
 import com.codingskillshub.bitpigeon.domain.entities.Client
+import com.codingskillshub.bitpigeon.domain.entities.StoreIn
+import com.codingskillshub.bitpigeon.domain.entities.TransferStatus
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.AttachmentDao
 import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
+import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.File
-import java.io.FileOutputStream
+import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,7 +35,8 @@ import javax.inject.Singleton
 class FileTransferService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val configurationService: ConfigurationService,
-    private val attachmentDao: AttachmentDao
+    private val attachmentDao: AttachmentDao,
+    private val fileStorageService: FileStorageService
 ) {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var serverSocketManager: ServerSocketManager? = null
@@ -46,10 +51,6 @@ class FileTransferService @Inject constructor(
     companion object {
         private const val PORT = 8889
         private const val BUFFER_SIZE = 4096
-    }
-
-    init {
-
     }
 
     fun startFileTransferServer() {
@@ -68,13 +69,8 @@ class FileTransferService @Inject constructor(
 
     fun stopFileTransferServer() {
         serverSocketManager?.stop()
-
     }
 
-    /**
-     * Updates the progress for a specific attachment. 
-     * If progress is null, the entry is removed (transfer completed/failed).
-     */
     private fun updateProgress(attachmentId: String, progress: Int?) {
         _transferProgress.update { currentList ->
             if (progress == null) {
@@ -93,70 +89,65 @@ class FileTransferService @Inject constructor(
     }
 
     private suspend fun receiveFile(attachment: Attachment, clientId: String) {
-//        serviceScope.launch {
-            try {
-                // Ensure metadata is inserted for the receiver
-                attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
-                
-                updateProgress(attachment.id, 0)
-                // Determine save path in app-specific directory
-                val directory = File(context.getExternalFilesDir(null), "BitPigeon")
-                if (!directory.exists()) directory.mkdirs()
-                val file = File(directory, attachment.fileName)
+        try {
+            attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
+            updateProgress(attachment.id, 0)
 
-                FileOutputStream(file).use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var totalRead = 0L
-                    while (totalRead < attachment.fileSize) {
-                        val toRead = if (attachment.fileSize - totalRead < BUFFER_SIZE.toLong()) {
-                            (attachment.fileSize - totalRead).toInt()
-                        } else {
-                            BUFFER_SIZE
-                        }
+            val (outputStream, uri) = fileStorageService.getOutputStream(attachment.fileName, attachment.storeIn == StoreIn.PRIVATE_STORAGE)
 
-                        val bytesRead = serverSocketManager?.readBytesFromClient(clientId, buffer, BUFFER_SIZE, toRead) ?: -1
-                        if (bytesRead <= 0) break
-
-                        output.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-
-                        val progress = if (attachment.fileSize > 0) (totalRead * 100 / attachment.fileSize).toInt() else 100
-                        updateProgress(attachment.id, progress)
+            outputStream.use { output ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var totalRead = 0L
+                while (totalRead < attachment.fileSize) {
+                    val toRead = if (attachment.fileSize - totalRead < BUFFER_SIZE.toLong()) {
+                        (attachment.fileSize - totalRead).toInt()
+                    } else {
+                        BUFFER_SIZE
                     }
+
+                    val bytesRead = serverSocketManager?.readBytesFromClient(clientId, buffer, toRead) ?: -1
+                    if (bytesRead <= 0) break
+
+                    output.write(buffer, 0, bytesRead)
+                    totalRead += bytesRead
+
+                    val progress = if (attachment.fileSize > 0) (totalRead * 100 / attachment.fileSize).toInt() else 100
+                    updateProgress(attachment.id, progress)
                 }
-                Log.d("FileTransferService", "File received successfully: ${file.absolutePath}")
-                attachmentDao.updateTransferStatus(attachment.id, TransferStatus.COMPLETED)
-            } catch (e: Exception) {
-                Log.e("FileTransferService", "Error receiving file: ${e.message}")
-                attachmentDao.updateTransferStatus(attachment.id, TransferStatus.FAILED)
-            } finally {
-                updateProgress(attachment.id, null)
             }
-        waitForIncomingFileFromClient(clientId)
-//        }
+            if (attachment.storeIn == StoreIn.PUBLIC_STORAGE) {
+                fileStorageService.finalizeFile(uri)
+            }
+            Log.d("FileTransferService", "File received successfully: $uri")
+            attachmentDao.insertAttachment(attachment.copy(filePath = uri.toString(), transferStatus = TransferStatus.COMPLETED))
+        } catch (e: Exception) {
+            Log.e("FileTransferService", "Error receiving file: ${e.message}")
+            attachmentDao.updateTransferStatus(attachment.id, TransferStatus.FAILED)
+        } finally {
+            updateProgress(attachment.id, null)
+            waitForIncomingFileFromClient(clientId)
+        }
     }
 
     suspend fun sendAttachmentToClient(attachment: Attachment, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
         val clientSocketManager = ClientSocketManager()
         try {
+            attachmentDao.insertAttachment(attachment.copy(filePath = fileUri,transferStatus = TransferStatus.TRANSFERRING))
             updateProgress(attachment.id, 0)
             Log.d("FileTransferService","Connecting to FileTransfer Server at ${client.ipAddress}:${PORT}")
             clientSocketManager.connect(client.ipAddress, PORT)
 
-            // Step 1: Handshake with User object as expected by ServerSocketManager
             selfUser?.let { clientSocketManager.sendMessage(it) }
 
-            // Step 2: Send metadata via ActionMessage
             val actionMessage = ActionMessage("SEND_ATTACHMENT", attachment)
             clientSocketManager.sendMessage(actionMessage)
 
-            // Step 3: Stream the file bytes in 4KB chunks
             context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
                 val buffer = ByteArray(BUFFER_SIZE)
                 var bytesRead: Int
                 var totalSent = 0L
                 while (input.read(buffer).also { bytesRead = it } != -1) {
-                    clientSocketManager.sendBytes(buffer, BUFFER_SIZE, bytesRead)
+                    clientSocketManager.sendBytes(buffer, bytesRead)
                     totalSent += bytesRead
                     val progress = if (attachment.fileSize > 0) (totalSent * 100 / attachment.fileSize).toInt() else 100
                     updateProgress(attachment.id, progress)
@@ -164,8 +155,10 @@ class FileTransferService @Inject constructor(
                 clientSocketManager.flushBuffer()
             }
             Log.d("FileTransferService", "File sent successfully to ${client.ipAddress}")
+            attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.COMPLETED))
         } catch (e: Exception) {
             Log.e("FileTransferService", "Error sending file: ${e.message}")
+            attachmentDao.updateTransferStatus(attachment.id, TransferStatus.FAILED)
         } finally {
             Log.d("FileTransferService","Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
             clientSocketManager.disconnect()
@@ -176,12 +169,10 @@ class FileTransferService @Inject constructor(
     suspend fun sendAttachmentToLocal(attachment: Attachment, fileUri: String) = withContext(Dispatchers.IO) {
         try {
             updateProgress(attachment.id, 0)
-            val directory = File(context.getExternalFilesDir(null), "BitPigeon")
-            if (!directory.exists()) directory.mkdirs()
-            val file = File(directory, attachment.fileName)
+            val (outputStream, uri) = fileStorageService.getOutputStream(attachment.fileName, attachment.storeIn == StoreIn.PRIVATE_STORAGE)
 
             context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
-                FileOutputStream(file).use { output ->
+                outputStream.use { output ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     var bytesRead: Int
                     var totalCopied = 0L
@@ -193,7 +184,11 @@ class FileTransferService @Inject constructor(
                     }
                 }
             }
-            Log.d("FileTransferService", "File copied locally: ${file.absolutePath}")
+            if (attachment.storeIn == StoreIn.PUBLIC_STORAGE) {
+                fileStorageService.finalizeFile(uri)
+            }
+            Log.d("FileTransferService", "File copied locally: $uri")
+            attachmentDao.insertAttachment(attachment.copy(filePath = uri.toString(), transferStatus = TransferStatus.COMPLETED))
         } catch (e: Exception) {
             Log.e("FileTransferService", "Error copying file locally: ${e.message}")
         } finally {

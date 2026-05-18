@@ -67,6 +67,9 @@ fun ChatView(
         },
         onBackClick = {
             navController.popBackStack()
+        },
+        onTitleClick = {
+            navController.navigate("chat_group_detail/{chatGroup.group.id}")
         }
     )
 
@@ -79,7 +82,8 @@ fun ChatViewContent(
     attachedItems: List<AttachmentPreviewData>,
     onSendMessage: (String) -> Unit,
     onAttachClick: () -> Unit,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onTitleClick: () -> Unit
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
@@ -99,7 +103,10 @@ fun ChatViewContent(
                 showLeadingImage = true,
                 onNavigationClick = {
                     onBackClick()
-                }
+                },
+                onTitleRowClicked = {
+                    onTitleClick()
+                },
             )
         },
         bottomBar = {
@@ -129,7 +136,7 @@ fun ChatViewContent(
         ) {
             items(
                 items = messages,
-                key = { it.message.timestamp }
+                key = { it.message.id }
             ) { message ->
                 MessageBubble(
                     senderName = message.userName,
@@ -138,6 +145,8 @@ fun ChatViewContent(
                     isSentByMe = message.isSentByMe,
                     // Only show header if it's the first message or sender changed
                     showHeader = !message.isSentByMe,
+                    showDate = !message.date.isEmpty(),
+                    date = message.date,
                     imageThumbnails = message.attachmentPreviewData
                 )
             }
@@ -145,18 +154,20 @@ fun ChatViewContent(
     }
 }
 
+
+
 @Preview(showBackground = true)
 @Composable
 fun ChatViewPreview() {
     val dummyAttachmentPreviewData = listOf(
         AttachmentPreviewData(
-            id = "",
+            id = "att1",
             fileName = "file.txt",
             fileType = "text/plain",
             fileUri = Uri.parse("https://example.com/file.txt")
         ),
         AttachmentPreviewData(
-            id = "",
+            id = "att2",
             fileName = "image.jpg",
             fileType = "image/jpeg",
             fileUri = Uri.parse("https://example.com/image.jpg")
@@ -171,6 +182,7 @@ fun ChatViewPreview() {
                 MessageData("Hey! Is the Wi-Fi P2P working?", emptyList()),
                 "21:21"
                 ),
+            "",
             "John",
             true,
             true,
@@ -178,12 +190,13 @@ fun ChatViewPreview() {
         ),
         ChatMessageUIExtended(
             ChatMessage(
-                "1",
+                "2",
                 "2",
                 "2",
                 MessageData("Yes, just finished the ChatView implementation.", emptyList()),
                 "21:21"
             ),
+            "",
             "Murphy",
             false,
             true,
@@ -191,12 +204,13 @@ fun ChatViewPreview() {
         ),
         ChatMessageUIExtended(
             ChatMessage(
-                "1",
+                "3",
                 "2",
                 "2",
                 MessageData("Awesome, try sending an emoji! 🚀", emptyList()),
                 "21:21"
             ),
+            "",
             "John",
             true,
             false,
@@ -204,12 +218,13 @@ fun ChatViewPreview() {
         ),
         ChatMessageUIExtended(
             ChatMessage(
-                "1",
+                "4",
                 "2",
                 "2",
                 MessageData("Working perfectly fine. 👍", emptyList()),
                 "21:21"
             ),
+            "",
             "Murphy",
             false,
             true,
@@ -221,6 +236,7 @@ fun ChatViewPreview() {
         chatPartnerName = "Aman Gupta",
         messages = dummyMessages,
         dummyAttachmentPreviewData,
+        {},
         {},
         {},
         {}

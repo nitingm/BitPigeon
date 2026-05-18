@@ -28,6 +28,9 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachment WHERE chatGroupId = :chatGroupId")
     fun getAllAttachmentsForChatGroup(chatGroupId: String): Flow<List<Attachment>>
 
+    @Query("SELECT * FROM attachment WHERE chatGroupId = :chatGroupId")
+    fun getAllAttachmentsForChatGroupSync(chatGroupId: String): List<Attachment>
+
     @Query("UPDATE attachment SET transferStatus = :status WHERE id = :id")
     suspend fun updateTransferStatus(id: String, status: TransferStatus)
 }

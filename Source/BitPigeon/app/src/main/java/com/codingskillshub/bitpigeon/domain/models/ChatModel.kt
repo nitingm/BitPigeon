@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -153,6 +154,11 @@ class ChatModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun getUsersById(userIds: List<String>): Flow<List<User>> {
+        val users = userDao.getUsersByIds(userIds)
+        return users
     }
 
     private fun isPersonalChat(chatGroup: ChatGroup?): Boolean {

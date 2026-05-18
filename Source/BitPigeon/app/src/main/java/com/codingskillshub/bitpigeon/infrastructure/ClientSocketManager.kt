@@ -75,7 +75,7 @@ class ClientSocketManager() {
         }
     }
 
-    suspend fun sendBytes(buffer: ByteArray, bufferSize: Int, toSend: Int) = withContext(Dispatchers.IO) {
+    suspend fun sendBytes(buffer: ByteArray, toSend: Int) = withContext(Dispatchers.IO) {
         try {
             outStream?.write(buffer, 0, toSend)
         } catch (e: IOException) {

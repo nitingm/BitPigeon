@@ -21,6 +21,7 @@ import androidx.navigation.navArgument
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
+import com.codingskillshub.bitpigeon.ui.viewmodels.AttachmentViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ProfileViewModel
@@ -49,13 +50,15 @@ class MainActivity : ComponentActivity() {
     }
 
     // Define the permissions needed based on Android Version
-    private val permissionsToRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        arrayOf(
-            Manifest.permission.NEARBY_WIFI_DEVICES,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
-    } else {
-        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    private val permissionsToRequest: Array<String> = run {
+        val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.NEARBY_WIFI_DEVICES)
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        permissions.toTypedArray()
     }
 
 
@@ -102,9 +105,15 @@ class MainActivity : ComponentActivity() {
                         arguments = listOf(navArgument("chatId") { type = NavType.StringType })
                         ) { backStackEntry ->
                         val chatViewModel: ChatViewModel = hiltViewModel()
-                        //val chatId = backStackEntry.arguments?.getString("chatId") ?: ""
 
                         ChatView(navController,  systemViewModel, chatViewModel)
+                    }
+                    composable("chat_group_detail/{chatId}",
+                        arguments = listOf(navArgument("chatId") { type = NavType.StringType})
+                    ) {  backStackEntry ->
+                        val attachmentViewModel: AttachmentViewModel = hiltViewModel()
+                        val chatViewModel: ChatViewModel = hiltViewModel()
+                        ChatGroupDetailView(navController, attachmentViewModel, chatViewModel)
                     }
                 }
                 composable("profile_edit") {

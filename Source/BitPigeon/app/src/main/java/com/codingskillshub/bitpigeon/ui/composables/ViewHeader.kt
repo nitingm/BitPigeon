@@ -1,6 +1,7 @@
 package com.codingskillshub.bitpigeon.ui.composables
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.dp
 fun ViewHeader(
     title: String,
     subtitle: String? = null,
+    onTitleRowClicked: () -> Unit = {},
     // Navigation (Left)
     showNavigationIcon: Boolean = true,
     navigationIconEnabled: Boolean = true,
@@ -64,6 +66,7 @@ fun ViewHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
+                    .clickable { onTitleRowClicked() }
             ) {
                 // Profile Image before text
                 if (showLeadingImage) {

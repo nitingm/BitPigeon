@@ -41,7 +41,7 @@ class WifiCommunicationService @Inject constructor(
 
     companion object {
         private const val SERVICE_TYPE = "_bitpigeon._tcp"
-        private const val SERVICE_NAME = "BitPigeon Chat"
+        private const val SERVICE_NAME = "BitPigeon_Chat_"
     }
 
     // 1. Use MutableStateFlow to hold the state
@@ -78,6 +78,8 @@ class WifiCommunicationService @Inject constructor(
     private val refreshMutex = Mutex()
 
     var onServiceAdvertisingChanged: ((Boolean) -> Unit)? = null
+
+    private var user: User? = null
 
     fun updateWifiStatus(enabled: Boolean) {
         // 3. Updating the value automatically emits a signal to all collectors
@@ -217,7 +219,7 @@ class WifiCommunicationService @Inject constructor(
             "isServer" to isServer.toString()
         )
 
-        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME, SERVICE_TYPE, record)
+        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME+user.id, SERVICE_TYPE, record)
 
         manager.addLocalService(channel, serviceInfo, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
@@ -238,7 +240,7 @@ class WifiCommunicationService @Inject constructor(
     fun stopServiceAdvertising() {
         if (!isServiceAdvertising) return
 
-        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME, SERVICE_TYPE, emptyMap())
+        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME+user?.id, SERVICE_TYPE, emptyMap())
         manager.removeLocalService(channel, serviceInfo, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 isServiceAdvertising = false
@@ -264,7 +266,7 @@ class WifiCommunicationService @Inject constructor(
             { instanceName, registrationType, device ->
                 // Called when a service is found
                 Log.d("WifiCommService", "Service found: $instanceName on ${device.deviceName}")
-                if (instanceName == SERVICE_NAME && registrationType == SERVICE_TYPE) {
+                if (instanceName.startsWith(SERVICE_NAME) && registrationType == SERVICE_TYPE) {
                     val currentServices = _discoveredServices.value.toMutableMap()
                     currentServices[device.deviceAddress] = device
                     _discoveredServices.value = currentServices

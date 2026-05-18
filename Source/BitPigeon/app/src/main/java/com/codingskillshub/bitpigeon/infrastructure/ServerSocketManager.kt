@@ -141,9 +141,9 @@ class ServerSocketManager(private val port: Int) {
         }
     }
 
-    suspend fun readBytesFromClient(clientId: String, buffer: ByteArray, bufferSize: Int, toRead: Int): Int = withContext(Dispatchers.IO) {
+    suspend fun readBytesFromClient(clientId: String, buffer: ByteArray, toRead: Int): Int = withContext(Dispatchers.IO) {
         val client = clientsMap[clientId]
-        var bytesRead = 0
+        var bytesRead = -1
         if (client != null) {
             try {
                 bytesRead = client.inputStream.read(buffer, 0, toRead)

@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -28,6 +29,7 @@ import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.io.path.exists
 
 @Singleton
 class AttachmentModel @Inject constructor(
@@ -40,6 +42,9 @@ class AttachmentModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private val modelScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val attachmentsDirectory: File by lazy {
+        File(context.getExternalFilesDir(null), "BitPigeon")
+    }
 
     init {
         modelScope.launch {
@@ -81,14 +86,12 @@ class AttachmentModel @Inject constructor(
                 attachmentsWithUris.forEach { (attachment, uri) ->
                     attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
                     fileTransferService.sendAttachmentToLocal(attachment, uri.toString())
-                    attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.COMPLETED))
                 }
             } else {
                 val clients = getOnlineClientsForChatGroup(chatGroupId)
                 if (clients.isEmpty()) return@launch
 
                 attachmentsWithUris.forEach { (attachment, uri) ->
-                    attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
                     clients.forEach { client ->
                         launch {
                             try {
@@ -191,5 +194,77 @@ class AttachmentModel @Inject constructor(
                 null
             }
         }
+    }
+
+    fun getPhotoAttachmentPreviewDataForChatGroup(chatGroupId: String): Flow<List<AttachmentPreviewData>> {
+        return attachmentDao.getAllAttachmentsForChatGroup(chatGroupId).map { attachments ->
+            attachments.mapNotNull { it.toImagePreviewOrNull() }
+        }
+    }
+
+    private fun Attachment.toImagePreviewOrNull(): AttachmentPreviewData? {
+        val file = File(attachmentsDirectory, fileName)
+
+        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
+        val isLocalImage = file.exists() &&
+                fileType.startsWith("image/", ignoreCase = true)
+
+        return if (isLocalImage) {
+            AttachmentPreviewData(
+                id = id,
+                fileName = fileName,
+                fileType = fileType,
+                // Recommendation: Use FileProvider if this URI is shared externally
+                fileUri = Uri.fromFile(file)
+            )
+        } else null
+    }
+
+    fun getVideoAttachmentPreviewDataForInChatGroup(chatGroupId: String): Flow<List<AttachmentPreviewData>> {
+        return attachmentDao.getAllAttachmentsForChatGroup(chatGroupId).map { attachments ->
+            attachments.mapNotNull { it.toVideoPreviewOrNull() }
+        }
+    }
+
+    private fun Attachment.toVideoPreviewOrNull(): AttachmentPreviewData? {
+        val file = File(attachmentsDirectory, fileName)
+
+        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
+        val isLocalImage = file.exists() &&
+                fileType.startsWith("video/, ignoreCase = true")
+
+        return if (isLocalImage) {
+            AttachmentPreviewData(
+                id = id,
+                fileName = fileName,
+                fileType = fileType,
+                // Recommendation: Use FileProvider if this URI is shared externally
+                fileUri = Uri.fromFile(file)
+            )
+        } else null
+    }
+
+    fun getFileAttachmentPreviewDataForInChatGroup(chatGroupId: String): Flow<List<AttachmentPreviewData>> {
+        return attachmentDao.getAllAttachmentsForChatGroup(chatGroupId).map { attachments ->
+            attachments.mapNotNull { it.toFilePreviewOrNull() }
+        }
+    }
+
+    private fun Attachment.toFilePreviewOrNull(): AttachmentPreviewData? {
+        val file = File(attachmentsDirectory, fileName)
+
+        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
+        val isLocalImage = file.exists() &&
+                fileType.startsWith("pdf/, ignoreCase = true")
+
+        return if (isLocalImage) {
+            AttachmentPreviewData(
+                id = id,
+                fileName = fileName,
+                fileType = fileType,
+                // Recommendation: Use FileProvider if this URI is shared externally
+                fileUri = Uri.fromFile(file)
+            )
+        } else null
     }
 }

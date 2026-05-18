@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
 
+    <!-- Required for writing to files (Android 9 and below) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+
     <!-- 2. Hardware Requirement -->
     <uses-feature android:name="android.hardware.wifi.direct" android:required="true" />
 
@@ -24,9 +27,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/bitpigeon_ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@mipmap/bitpigeon_ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.BitPigeon">
         <activity

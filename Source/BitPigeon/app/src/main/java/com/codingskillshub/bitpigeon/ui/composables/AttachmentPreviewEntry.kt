@@ -1,6 +1,7 @@
 package com.codingskillshub.bitpigeon.ui.composables
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -36,7 +37,8 @@ fun AttachmentPreviewEntry(
     viewType: ViewType = ViewType.LIST,
     showFileName: Boolean = true,
     isTransferring: Boolean = false,
-    progress: Int = 0
+    progress: Int = 0,
+    onClick: () -> Unit = {}
 ) {
     if (viewType == ViewType.LIST) {
         Row(
@@ -50,7 +52,8 @@ fun AttachmentPreviewEntry(
                 fileUri = fileUri,
                 size = 48.dp,
                 isTransferring = isTransferring,
-                progress = progress
+                progress = progress,
+                onClick = onClick
             )
             
             if (showFileName) {
@@ -78,7 +81,8 @@ fun AttachmentPreviewEntry(
                 fileUri = fileUri,
                 size = 64.dp,
                 isTransferring = isTransferring,
-                progress = progress
+                progress = progress,
+                onClick = onClick
             )
             
             if (showFileName) {
@@ -104,13 +108,15 @@ private fun AttachmentPreviewBox(
     fileUri: String,
     size: Dp,
     isTransferring: Boolean = false,
-    progress: Int = 0
+    progress: Int = 0,
+    onClick: () -> Unit = {}
 ) {
     Box(
         modifier = Modifier
             .size(size)
             .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer),
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
         val isImage = fileType.startsWith("image/", ignoreCase = true)

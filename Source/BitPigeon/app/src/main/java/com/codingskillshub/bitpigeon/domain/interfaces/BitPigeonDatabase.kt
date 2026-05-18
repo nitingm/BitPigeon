@@ -19,7 +19,7 @@ import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 
 @Database(
     entities = [ChatMessage::class, ChatGroupDb::class, ChatGroupMember::class, User::class, Attachment::class],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(DataTypeConvertor::class)

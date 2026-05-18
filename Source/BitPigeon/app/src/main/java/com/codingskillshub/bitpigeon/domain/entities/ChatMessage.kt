@@ -28,6 +28,7 @@ data class ChatMessage(
 
 data class ChatMessageUIExtended(
     val message: ChatMessage,
+    val date: String,
     val userName: String,
     val isSentByMe: Boolean,
     val isDelivered: Boolean,

@@ -12,6 +12,11 @@ enum class TransferStatus : Serializable {
     FAILED
 }
 
+enum class StoreIn : Serializable {
+    PRIVATE_STORAGE,
+    PUBLIC_STORAGE
+}
+
 @Entity(tableName = "attachment")
 data class Attachment (
     @PrimaryKey val id: String,
@@ -22,7 +27,9 @@ data class Attachment (
     val fileSize: Long,
     val fileType: String,
     val timeStamp: String,
-    val transferStatus: TransferStatus = TransferStatus.PENDING
+    val filePath: String = "",
+    val transferStatus: TransferStatus = TransferStatus.PENDING,
+    val storeIn: StoreIn = StoreIn.PUBLIC_STORAGE
 ) : Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L

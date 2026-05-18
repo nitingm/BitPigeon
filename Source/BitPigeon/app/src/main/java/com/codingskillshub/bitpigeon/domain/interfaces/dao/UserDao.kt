@@ -18,6 +18,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE id = :userId")
     fun getUserById(userId: String): Flow<User?>
 
+    @Query("SELECT * FROM users WHERE id IN (:userIds)")
+    fun getUsersByIds(userIds: List<String>): Flow<List<User>>
+
     @Query("SELECT * FROM users")
     fun getAllUsers(): Flow<List<User>>
 }
