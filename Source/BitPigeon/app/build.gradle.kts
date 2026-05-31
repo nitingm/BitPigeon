@@ -83,4 +83,9 @@ dependencies {
     // Coil for image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
+
+    // Image processing and graphics
+    implementation("androidx.graphics:graphics-core:1.0.0-alpha03")
+    implementation("androidx.compose.foundation:foundation:1.8.0")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 }

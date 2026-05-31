@@ -1,10 +1,12 @@
 package com.codingskillshub.bitpigeon.ui.viewmodels
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.models.AttachmentModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -14,20 +16,18 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AttachmentViewModel @Inject constructor(
-    val attachmentModel: AttachmentModel
+    private val attachmentModel: AttachmentModel,
+    savedStateHandle: SavedStateHandle // Prefer getting ID from navigation args
 ) : ViewModel() {
-    private var activeChatGroupId: String = ""
-    val photosInChatGroup: StateFlow<List<AttachmentPreviewData>> = attachmentModel.getPhotoAttachmentPreviewDataForChatGroup(activeChatGroupId)
+    private val chatId: String = savedStateHandle["chatId"] ?: ""
+
+    val photosInChatGroup = attachmentModel.getPhotoAttachmentPreviewDataForChatGroup(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val videosInChatGroup: StateFlow<List<AttachmentPreviewData>>  = attachmentModel.getVideoAttachmentPreviewDataForInChatGroup(activeChatGroupId)
+    val videosInChatGroup = attachmentModel.getVideoAttachmentPreviewDataForInChatGroup(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val filesInChatGroup: StateFlow<List<AttachmentPreviewData>>  = attachmentModel.getFileAttachmentPreviewDataForInChatGroup(activeChatGroupId)
+    val filesInChatGroup = attachmentModel.getFileAttachmentPreviewDataForInChatGroup(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-
-    fun setActiveChatGroupId(chatGroupId: String) {
-        activeChatGroupId = chatGroupId
-    }
 }

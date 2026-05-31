@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
@@ -45,17 +46,16 @@ fun ChatGroupDetailView(
     attachmentViewModel: AttachmentViewModel,
     chatViewModel: ChatViewModel
 ) {
-    // This will be connected to the ViewModel states in the next step
-    val chatGroup = chatViewModel.chatGroup
-    val users = chatViewModel.getUsersInGroup(chatGroup.value).collectAsState(emptyList())
-    attachmentViewModel.setActiveChatGroupId(chatGroup.value?.group?.id ?: "")
-    val photos by attachmentViewModel.photosInChatGroup.collectAsState()
-    val videos by attachmentViewModel.videosInChatGroup.collectAsState()
-    val files by attachmentViewModel.filesInChatGroup.collectAsState()
+    // Collect states safely with lifecycle awareness
+    val chatGroup by chatViewModel.chatGroup.collectAsStateWithLifecycle()
+    val users by chatViewModel.usersInGroup.collectAsStateWithLifecycle()
+    val photos by attachmentViewModel.photosInChatGroup.collectAsStateWithLifecycle()
+    val videos by attachmentViewModel.videosInChatGroup.collectAsStateWithLifecycle()
+    val files by attachmentViewModel.filesInChatGroup.collectAsStateWithLifecycle()
 
     ChatGroupDetailViewContent(
-        chatGroup = chatGroup.value,
-        users = users.value,
+        chatGroup = chatGroup,
+        users = users,
         photos = photos,
         videos = videos,
         files = files,
@@ -310,7 +310,7 @@ fun ChatGroupDetailViewPreview() {
     )
     val dummyUsers = listOf(
         User("1", "Aman Gupta", "addr1", "123", "aman@mail.com", null, "Working on it!"),
-        User("2", "Nitin", "addr2", "456", "nitin@mail.com", null, "Available")
+        User("2", "John Doe", "addr2", "456", "nitin@mail.com", null, "Available")
     )
     MaterialTheme {
         ChatGroupDetailViewContent(

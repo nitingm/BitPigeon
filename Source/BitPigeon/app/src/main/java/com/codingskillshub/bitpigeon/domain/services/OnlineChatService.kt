@@ -119,6 +119,11 @@ class OnlineChatService @Inject constructor(
                     _availablePeerClients.value = emptyList()
                     wifiCommunicationService.startServiceAdvertising(_selfUser)
                 }
+                onUserInfoReceived = { user ->
+                    serviceScope.launch {
+                        _incomingUsers.emit(user)
+                    }
+                }
             }
             chatClient?.connectToServer(host, PORT)
         }

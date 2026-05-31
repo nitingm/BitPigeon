@@ -107,4 +107,94 @@ class FileStorageService @Inject constructor(
             else -> "application/octet-stream"
         }
     }
+
+    fun checkFileExist(fileName: String, uri: Uri): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val cursor = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val existingFileName = it.getString(it.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME))
+                    existingFileName == fileName
+                } else {
+                    false
+                }
+            } ?: false
+        } else {
+            val file = File(uri.path ?: return false)
+            file.exists() && file.name == fileName
+        }
+    }
+    
+    fun getFileUri(fileName: String, isPrivateStorage: Boolean = true): Uri? {
+        return if (isPrivateStorage) {
+            val directory = File(context.getExternalFilesDir(null), "BitPigeon")
+            val file = File(directory, fileName)
+            if (file.exists()) Uri.fromFile(file) else null
+        } else {
+            val extension = fileName.substringAfterLast(".").lowercase()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val (contentUri, relativePath) = when (extension) {
+                    "jpg", "jpeg", "png", "gif", "webp" ->
+                        Pair(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_PICTURES)
+                    "mp4", "mkv", "mov" ->
+                        Pair(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_MOVIES)
+                    else ->
+                        Pair(MediaStore.Downloads.EXTERNAL_CONTENT_URI, Environment.DIRECTORY_DOWNLOADS)
+                }
+
+                val projection = arrayOf(MediaStore.MediaColumns._ID)
+                val selection = "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?"
+                val selectionArgs = arrayOf(fileName, "$relativePath/BitPigeon%")
+
+                context.contentResolver.query(
+                    contentUri,
+                    projection,
+                    selection,
+                    selectionArgs,
+                    null
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID))
+                        Uri.withAppendedPath(contentUri, id.toString())
+                    } else null
+                }
+            } else {
+                val relativePath = when (extension) {
+                    "jpg", "jpeg", "png", "gif", "webp" -> Environment.DIRECTORY_PICTURES
+                    "mp4", "mkv", "mov" -> Environment.DIRECTORY_MOVIES
+                    else -> Environment.DIRECTORY_DOWNLOADS
+                }
+                @Suppress("DEPRECATION")
+                val baseDir = Environment.getExternalStoragePublicDirectory(relativePath)
+                val directory = File(baseDir, "BitPigeon")
+                val file = File(directory, fileName)
+                if (file.exists()) Uri.fromFile(file) else null
+            }
+        }
+    }
+    
+    fun getPrivateFileByName(fileName: String): Pair<String, Uri>? {
+        val files = getAllPrivateFiles()
+        return files.find { filePair -> filePair.first.startsWith(fileName) }
+    }
+    
+    fun deletePrivateFileByUri(uri: Uri): Boolean {
+        return try {
+            val file = File(uri.path ?: return false)
+            file.exists() && file.delete()
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    fun getAllPrivateFiles(): List<Pair<String, Uri>> {
+        val directory = File(context.getExternalFilesDir(null), "BitPigeon")
+        if (!directory.exists() || !directory.isDirectory) return emptyList()
+        
+        return directory.listFiles()
+            ?.filter { it.isFile }
+            ?.map { file -> Pair(file.name, Uri.fromFile(file)) } 
+            ?: emptyList()
+    }
 }

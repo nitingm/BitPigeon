@@ -1,6 +1,10 @@
 package com.codingskillshub.bitpigeon.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
@@ -35,15 +40,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
+import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
+import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
+import com.codingskillshub.bitpigeon.ui.composables.ProfilePictureEditOverlay
 import com.codingskillshub.bitpigeon.ui.viewmodels.ProfileViewModel
 
 @Composable
@@ -55,12 +70,48 @@ fun ProfileView(
     val phoneNumber by viewModel.phoneNumber.collectAsState()
     val emailAddress by viewModel.emailAddress.collectAsState()
     val statusLabel by viewModel.statusLabel.collectAsState()
+    val profilePictureUri by viewModel.profilePictureUri.collectAsState()
+    var selectedProfilePicture by remember { mutableStateOf<AttachmentPreviewData?>(null) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri -> 
+        uri?.let { 
+            selectedProfilePicture = viewModel.toAttachmentData(it)
+        }
+    }
+
+    // Show the overlay if an attachment is selected
+    selectedProfilePicture?.let { data ->
+            ProfilePictureEditOverlay(
+                fileName = data.fileName,
+                fileType = data.fileType,
+                sourceFileUri = data.fileUri.toString(),
+                onDismiss = { selectedProfilePicture = null },
+                onSaveCrop = { sourceUri, fileName, cropBounds, displayW, displayH ->
+                    viewModel.saveCroppedProfilePicture(
+                        sourceUri = sourceUri,
+                        fileName = fileName,
+                        cropBounds = cropBounds,
+                        displayWidth = displayW,
+                        displayHeight = displayH,
+                        isPrivateStorage = true,
+                        onSuccess = { selectedProfilePicture = null }
+                    )
+                }
+            )
+    }
+
     ProfileViewContent(
         userName,
         phoneNumber,
         emailAddress,
         statusLabel,
-        onEditClick
+        profilePictureUri.toString(),
+        onEditClick,
+        {
+            filePickerLauncher.launch("image/*")
+        }
     )
 }
 
@@ -71,9 +122,22 @@ fun ProfileViewContent(
     phoneNumber: String,
     emailAddress: String,
     statusLabel: String,
+    profilePictureUri: String,
     onEditClick: () -> Unit,
+    onEditProfilePictureClick: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    var showProfilePictureFullscreen by remember { mutableStateOf<Boolean>(false) }
+
+    // Show the overlay if an attachment is selected
+    if (showProfilePictureFullscreen) {
+        ImageViewOverlay(
+            fileName = "Profile picture",
+            fileType = "image/jpg",
+            fileUri = profilePictureUri,
+            onDismiss = { showProfilePictureFullscreen = false }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -87,25 +151,37 @@ fun ProfileViewContent(
             modifier = Modifier.size(140.dp),
             contentAlignment = Alignment.BottomEnd
         ) {
-            // Placeholder for Profile Image
+            // Profile Image
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable( onClick = {
+                        showProfilePictureFullscreen = true
+                    }),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+
+                SubcomposeAsyncImage(
+                    model = profilePictureUri,
+                    contentDescription = "Profile Picture",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(80.dp),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 )
             }
 
             // Edit FAB for Picture
             SmallFloatingActionButton(
-                onClick = { /* TODO: Pick Image */ },
+                onClick = { onEditProfilePictureClick() },
                 containerColor = MaterialTheme.colorScheme.primary,
                 shape = CircleShape,
                 modifier = Modifier.offset(x = (-4).dp, y = (-4).dp)
@@ -219,5 +295,5 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
 @Preview
 @Composable
 fun ProfileViewPreview() {
-    ProfileViewContent("John Doe", "123-456-789", "john.doe@example.com","Hey there", onEditClick = {})
+    ProfileViewContent("John Doe", "123-456-789", "john.doe@example.com","Hey there", "", onEditClick = {}, onEditProfilePictureClick = {})
 }

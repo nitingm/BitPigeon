@@ -24,7 +24,7 @@ class ChatClient(
     var onCreateDirectChat: ((ChatGroup) -> Unit)? = null
     var onChatMessageReceived: ((ChatMessage) -> Unit)? = null
     var onServerDisconnection: (() -> Unit)? = null
-
+    var onUserInfoReceived: ((User) -> Unit)? = null
 
     init {
         clientSocketManager = ClientSocketManager()
@@ -54,6 +54,10 @@ class ChatClient(
             "SEND_CHAT_MESSAGE" -> {
                 val chatMessage = message.data as ChatMessage
                 handleIncomingChatMessage(chatMessage)
+            }
+            "SEND_USER_INFO" -> {
+                val user = message.data as User
+                handleUserInfoUpdate(user)
             }
         }
     }
@@ -85,9 +89,12 @@ class ChatClient(
     fun updateGroupInfo() {
 
     }
-    fun sendUserInfoUpdate() {
 
+    fun sendUserInfoUpdate(user: User) {
+        val message = ActionMessage("SEND_USER_INFO", user)
+        sendRequestMessage(message)
     }
+
     fun sendChatMessage(chatMessage: ChatMessage) {
         val message = ActionMessage("SEND_CHAT_MESSAGE", chatMessage)
         sendRequestMessage(message)
@@ -109,6 +116,10 @@ class ChatClient(
 
     private fun handleIncomingChatMessage(chatMessage: ChatMessage) {
         onChatMessageReceived?.invoke(chatMessage)
+    }
+
+    private fun handleUserInfoUpdate(user: User) {
+        onUserInfoReceived?.invoke(user)
     }
 
     private fun handleServerDisconnection() {

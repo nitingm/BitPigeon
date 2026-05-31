@@ -12,6 +12,7 @@ import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatGroupDao
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +40,7 @@ class AttachmentModel @Inject constructor(
     private val attachmentDao: AttachmentDao,
     private val onlineChatService: OnlineChatService,
     private val wifiCommunicationService: WifiCommunicationService,
+    private val fileStorageService: FileStorageService,
     @ApplicationContext private val context: Context
 ) {
     private val modelScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -164,6 +166,26 @@ class AttachmentModel @Inject constructor(
         }
     }
 
+    fun getAttachmentPreviewDataForUri(uri: Uri): AttachmentPreviewData {
+        val contentResolver = context.contentResolver
+        var fileName = "unknown"
+        val type = contentResolver.getType(uri) ?: "application/octet-stream"
+
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1 && cursor.moveToFirst()) {
+                fileName = cursor.getString(nameIndex) ?: "unknown"
+            }
+        }
+
+        return AttachmentPreviewData(
+                id = "",
+                fileName = fileName,
+                fileType = type,
+                fileUri = uri
+            )
+    }
+
     fun getAllAttachmentsForChatGroup(chatGroupId: String): Flow<List<Attachment>> {
         return attachmentDao.getAllAttachmentsForChatGroup(chatGroupId)
     }
@@ -203,10 +225,9 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toImagePreviewOrNull(): AttachmentPreviewData? {
-        val file = File(attachmentsDirectory, fileName)
-
+        val uri = Uri.parse(filePath)
         // Check if it's an image that exists locally but hasn't had its path updated in DB yet
-        val isLocalImage = file.exists() &&
+        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
                 fileType.startsWith("image/", ignoreCase = true)
 
         return if (isLocalImage) {
@@ -215,7 +236,7 @@ class AttachmentModel @Inject constructor(
                 fileName = fileName,
                 fileType = fileType,
                 // Recommendation: Use FileProvider if this URI is shared externally
-                fileUri = Uri.fromFile(file)
+                fileUri = uri
             )
         } else null
     }
@@ -227,10 +248,10 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toVideoPreviewOrNull(): AttachmentPreviewData? {
-        val file = File(attachmentsDirectory, fileName)
+        val uri = Uri.parse(filePath)
 
         // Check if it's an image that exists locally but hasn't had its path updated in DB yet
-        val isLocalImage = file.exists() &&
+        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
                 fileType.startsWith("video/, ignoreCase = true")
 
         return if (isLocalImage) {
@@ -239,7 +260,7 @@ class AttachmentModel @Inject constructor(
                 fileName = fileName,
                 fileType = fileType,
                 // Recommendation: Use FileProvider if this URI is shared externally
-                fileUri = Uri.fromFile(file)
+                fileUri = uri
             )
         } else null
     }
@@ -251,11 +272,11 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toFilePreviewOrNull(): AttachmentPreviewData? {
-        val file = File(attachmentsDirectory, fileName)
+        val uri = Uri.parse(filePath)
 
         // Check if it's an image that exists locally but hasn't had its path updated in DB yet
-        val isLocalImage = file.exists() &&
-                fileType.startsWith("pdf/, ignoreCase = true")
+        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
+                fileType.startsWith("application/, ignoreCase = true")
 
         return if (isLocalImage) {
             AttachmentPreviewData(
@@ -263,7 +284,7 @@ class AttachmentModel @Inject constructor(
                 fileName = fileName,
                 fileType = fileType,
                 // Recommendation: Use FileProvider if this URI is shared externally
-                fileUri = Uri.fromFile(file)
+                fileUri = uri
             )
         } else null
     }

@@ -7,6 +7,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -37,8 +41,27 @@ class ChatGroupListViewModel @Inject constructor(
      * We convert the Flow from the Model into a StateFlow here so it stays active
      * while the ViewModel is alive.
      */
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val conversations: StateFlow<List<ChatGroup>> = conversationModel.getAllConversations()
-    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .flatMapLatest { list: List<ChatGroup> ->
+            if (list.isEmpty()) {
+                flowOf(emptyList<ChatGroup>())
+            } else {
+                val flows: List<Flow<ChatGroup>> = list.map { chat ->
+                    if (chat.group.type == ChatGroupType.DIRECT) {
+                        // assumes userDao.getUserById returns Flow<User?>
+                        conversationModel.getUserById(chat.group.name)
+                            .map { user -> 
+                                if (user != null) chat.copy(group = chat.group.copy(name = user.name)) else chat 
+                            }
+                    } else {
+                        flowOf(chat)
+                    }
+                }
+                combine(flows) { it.toList() }
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
      * A filtered stream of conversations based on the search query.

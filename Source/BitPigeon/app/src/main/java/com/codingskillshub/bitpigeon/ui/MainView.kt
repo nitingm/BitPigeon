@@ -11,19 +11,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
-import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.BitPigeonNavigationBar
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
@@ -32,14 +26,46 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainView(
     navController: NavController,
-    systemViewModel: AppSystemViewModel
+    systemViewModel: AppSystemViewModel = hiltViewModel()
+) {
+    // Collect the flow into a State object that Compose understands
+    val isWifiEnabled by systemViewModel.isWifiEnabled.collectAsState()
+
+    MainViewContent(
+        navController = navController,
+        isWifiEnabled = isWifiEnabled
+    )
+}
+
+@Composable
+fun MainViewContent(
+    navController: NavController,
+    isWifiEnabled: Boolean,
+    // Hoisting sub-views as parameters allows providing mocks/placeholders in Previews
+    chatGroupListView: @Composable () -> Unit = {
+        ChatGroupListView(
+            navController,
+            chatGroupListViewModel = hiltViewModel()
+        )
+    },
+    discoverView: @Composable () -> Unit = {
+        DiscoverView(
+            navController,
+            discoverViewModel = hiltViewModel()
+        )
+    },
+    profileView: @Composable () -> Unit = {
+        ProfileView(
+            onEditClick = {
+                navController.navigate("profile_edit")
+            },
+            viewModel = hiltViewModel()
+        )
+    }
 ) {
     // 1. Pager State for Swiping (0 = Chats, 1 = Settings)
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
-
-    // Collect the flow into a State object that Compose understands
-    val isWifiEnabled by systemViewModel.isWifiEnabled.collectAsState()
 
     Scaffold(
         topBar = {
@@ -86,48 +112,37 @@ fun MainView(
             verticalAlignment = Alignment.Top
         ) { pageIndex ->
             when (pageIndex) {
-                0 -> {
-                    // Page 1: Chat List
-                    ChatGroupListView(
-                        navController,
-                        chatGroupListViewModel = hiltViewModel()
-                    )
-                }
-
-                1 -> {
-                    // Page 2: Discover
-                    DiscoverView(
-                        navController,
-                        discoverViewModel = hiltViewModel()
-                    )
-                }
-
-                2 -> {
-                    // Page 3: Profile
-                    ProfileView(
-                        onEditClick = {
-                            navController.navigate("profile_edit")
-                        },
-                        viewModel = hiltViewModel()
-                    )
-                }
+                0 -> chatGroupListView()
+                1 -> discoverView()
+                2 -> profileView()
             }
         }
     }
 }
 
-// Helper to provide dummy data for the preview
-//private fun getSampleChats() = listOf(
-//    ChatGroup("1", "Aman Gupta",  ChatGroupType.DIRECT,"Is the Wi-Fi connected?", "27/12/2025"),
-//    ChatGroup("2", "John Doe", ChatGroupType.DIRECT,"Sent the zip file.", "26/12/2025"),
-//    ChatGroup("3", "Dev Team", ChatGroupType.DIRECT,"K2 compiler is fast!", "25/12/2025")
-//)
-
 @Preview(showBackground = true)
 @Composable
 fun MainViewPreview() {
     MaterialTheme {
-        MainView(navController = NavController(LocalContext.current),
-                systemViewModel = viewModel())
+        // Use MainViewContent in Preview to provide dummy data and avoid ViewModel instantiation
+        MainViewContent(
+            navController = NavController(LocalContext.current),
+            isWifiEnabled = true,
+            chatGroupListView = {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Chat List Placeholder")
+                }
+            },
+            discoverView = {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Discover Placeholder")
+                }
+            },
+            profileView = {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Profile Placeholder")
+                }
+            }
+        )
     }
 }

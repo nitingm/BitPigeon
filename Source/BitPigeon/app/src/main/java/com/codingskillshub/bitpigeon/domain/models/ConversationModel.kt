@@ -95,6 +95,11 @@ class ConversationModel @Inject constructor(
                 }
             }
         }
+        modelScope.launch {
+            onlineChatService.incomingUsers.collect { user ->
+                userDao.insertOrUpdateUser(user)
+            }
+        }
     }
 
     /**
@@ -121,7 +126,7 @@ class ConversationModel @Inject constructor(
 
         val groupDb = ChatGroupDb(
             id = groupId,
-            name = if (isPersonal) "${peerUser.name} (You)" else peerUser.name,
+            name = if (isPersonal) "${peerUser.name} (You)" else peerUser.id,
             type = if (isPersonal) ChatGroupType.PERSONAL else ChatGroupType.DIRECT
         )
 
@@ -137,7 +142,7 @@ class ConversationModel @Inject constructor(
         }
         chatGroupDao.insertMembers(members)
 
-        onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb,members))
+        onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb.copy(name = myId),members))
 
         return groupDb.id
     }
@@ -175,6 +180,10 @@ class ConversationModel @Inject constructor(
 
     fun getChatGroupById(chatId: String): Flow<ChatGroup?> {
         return chatGroupDao.getChatGroupById(chatId)
+    }
+
+    fun getUserById(userId: String): Flow<User?> {
+        return userDao.getUserById(userId)
     }
 
     private suspend fun handleIncomingNewChatGroup(chatGroup: ChatGroup) {

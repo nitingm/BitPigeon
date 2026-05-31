@@ -19,10 +19,12 @@ import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -119,6 +121,15 @@ class ChatViewModel @Inject constructor(
 
     val chatGroup: StateFlow<ChatGroup?> = conversationModel.getChatGroupById(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val usersInGroup: StateFlow<List<User>> = chatGroup.flatMapLatest { group ->
+        getUsersInGroup(group)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     init {
         chatGroup

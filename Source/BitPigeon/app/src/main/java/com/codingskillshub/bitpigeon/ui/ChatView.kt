@@ -69,7 +69,7 @@ fun ChatView(
             navController.popBackStack()
         },
         onTitleClick = {
-            navController.navigate("chat_group_detail/{chatGroup.group.id}")
+            navController.navigate("chat_group_detail/${chatGroup?.group?.id}")
         }
     )
 

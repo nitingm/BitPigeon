@@ -100,14 +100,14 @@ fun DiscoverViewContent(
 @Preview(showBackground = true)
 @Composable
 fun DiscoverViewPreview() {
+    // Each WifiP2pDevice needs a unique deviceAddress to avoid duplicate keys in LazyColumn
     val sampleUsers = listOf(
-        Pair(User("1", "Aman Gupta", "none", "none", "none", "none"), WifiP2pDevice()),
-        Pair(User("2", "John Doe", "none", "none", "none", "none"), WifiP2pDevice()),
-        Pair(User("3", "Project Group", "none", "none", "none", "none"), WifiP2pDevice()),
-        Pair(User("4", "Mama", "none", "none", "none", "none"), WifiP2pDevice()),
-        Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice())
+        Pair(User("1", "Aman Gupta", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:01"; deviceName = "Aman's Phone" }),
+        Pair(User("2", "John Doe", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:02"; deviceName = "John's Phone" }),
+        Pair(User("3", "Project Group", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:03"; deviceName = "Project Group" }),
+        Pair(User("4", "Mama", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:04"; deviceName = "Mama's Phone" }),
+        Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
     )
 
     DiscoverViewContent(sampleUsers)
 }
-

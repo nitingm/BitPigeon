@@ -14,6 +14,7 @@ import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,8 +35,9 @@ object AppModule {
         attachmentDao: AttachmentDao,
         onlineChatService: OnlineChatService,
         wifiCommunicationService: WifiCommunicationService,
+        fileStorageService: FileStorageService,
         @ApplicationContext context: Context
-    ): AttachmentModel = AttachmentModel(fileTransferService, appSystemModel, chatGroupDao, attachmentDao, onlineChatService, wifiCommunicationService, context)
+    ): AttachmentModel = AttachmentModel(fileTransferService, appSystemModel, chatGroupDao, attachmentDao, onlineChatService, wifiCommunicationService, fileStorageService,context)
 
     @Provides
     @Singleton
