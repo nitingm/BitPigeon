@@ -7,8 +7,10 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codingskillshub.bitpigeon.common.ConfigurationService
+import com.codingskillshub.bitpigeon.common.DateTimeUtil
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessageUIExtended
 import com.codingskillshub.bitpigeon.domain.entities.TransferStatus
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -40,7 +43,7 @@ class ChatViewModel @Inject constructor(
     val conversationModel: ConversationModel,
     val configurationService: ConfigurationService,
     val fileTransferService: FileTransferService,
-    @ApplicationContext private val context: Context,
+    private val dateTimeUtil: DateTimeUtil,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     
@@ -92,17 +95,16 @@ class ChatViewModel @Inject constructor(
 
                 }
 
-            val rawTimestamp = message.timestamp
-            val currentDate = if (rawTimestamp.length >= 10) rawTimestamp.substring(0, 10) else ""
+            val currentDate = if (message.timestamp.length >= 10) message.timestamp.substring(0, 10) else ""
 
             val displayDate = if (currentDate.isNotEmpty() && currentDate != lastDate) {
                 lastDate = currentDate
-                currentDate
+                dateTimeUtil.toFriendlyDate(message.timestamp)
             } else {
                 ""
             }
 
-            val chatMessage = message.copy(timestamp = formatTimestamp(rawTimestamp))
+            val chatMessage = message.copy(timestamp = formatTimestamp(message.timestamp))
             ChatMessageUIExtended(
                 message = chatMessage,
                 date = displayDate,
@@ -119,7 +121,30 @@ class ChatViewModel @Inject constructor(
         initialValue = emptyList()
     )
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    // Enhance the chatGroup flow: for DIRECT or PERSONAL groups, treat group.name as a userId
+    // and replace the group's display name and profile picture with that user's data when available.
     val chatGroup: StateFlow<ChatGroup?> = conversationModel.getChatGroupById(chatId)
+        .flatMapLatest { group ->
+            if (group == null) {
+                flowOf(null)
+            } else if (group.group.type == ChatGroupType.DIRECT || group.group.type == ChatGroupType.PERSONAL) {
+                conversationModel.getUserById(group.group.name).map { user ->
+                    if (user != null) {
+                        // Replace display name and profile picture with user's information
+                        val replacedDb = group.group.copy(
+                            name = user.name,
+                            profilePicture = user.profilePicturePath
+                        )
+                        group.copy(group = replacedDb)
+                    } else {
+                        group
+                    }
+                }
+            } else {
+                flowOf(group)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -130,6 +155,10 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val isChatOnline: StateFlow<Boolean> = conversationModel.onlineGroups.flatMapLatest {
+        flowOf(it.any { it.group.id == chatId })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         chatGroup

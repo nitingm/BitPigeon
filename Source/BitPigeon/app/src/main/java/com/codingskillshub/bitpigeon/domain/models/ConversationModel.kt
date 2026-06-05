@@ -14,6 +14,7 @@ import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -126,7 +127,7 @@ class ConversationModel @Inject constructor(
 
         val groupDb = ChatGroupDb(
             id = groupId,
-            name = if (isPersonal) "${peerUser.name} (You)" else peerUser.id,
+            name = peerUser.id,
             type = if (isPersonal) ChatGroupType.PERSONAL else ChatGroupType.DIRECT
         )
 
@@ -142,11 +143,14 @@ class ConversationModel @Inject constructor(
         }
         chatGroupDao.insertMembers(members)
 
-        onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb.copy(name = myId),members))
+        if (!isPersonal) {
+            onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb.copy(name = myId),members))
+        }
 
         return groupDb.id
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     fun getAllConversations(): Flow<List<ChatGroup>> {
         return chatGroupDao.getAllChatGroups()
             .flatMapLatest { groups ->
@@ -168,6 +172,10 @@ class ConversationModel @Inject constructor(
                     ) { it.toList() }
                 }
             }
+    }
+
+    fun getAllUsers(): Flow<List<User>> {
+        return userDao.getAllUsers()
     }
 
     suspend fun createMyPersonalChat() {

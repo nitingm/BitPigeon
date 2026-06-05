@@ -4,11 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -20,18 +22,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.SubcomposeAsyncImage
 
 @Composable
 fun ChatEntry(
     name: String,
     lastMessage: String,
     timestamp: String, // Expected in dd/mm/yyyy format
+    profilePictureUri: String,
     isOnline: Boolean = false,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onProfilePictureClick: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -46,14 +52,23 @@ fun ChatEntry(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .clickable(onClick = onProfilePictureClick),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
+                        SubcomposeAsyncImage(
+                            model = profilePictureUri,
                             contentDescription = "Profile Picture",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile Picture",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         )
                     }
                     // Green online badge at bottom-right
@@ -114,6 +129,7 @@ fun ChatEntryOnlinePreview() {
             name = "Aman Gupta",
             lastMessage = "Hey, did you send the project files?",
             timestamp = "27/12/2025",
+            profilePictureUri = "",
             isOnline = true
         )
     }
@@ -127,6 +143,7 @@ fun ChatEntryOfflinePreview() {
             name = "Aman Gupta",
             lastMessage = "Hey, did you send the project files?",
             timestamp = "27/12/2025",
+            profilePictureUri = "",
             isOnline = false
         )
     }

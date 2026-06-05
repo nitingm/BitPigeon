@@ -309,8 +309,8 @@ fun ChatGroupDetailViewPreview() {
         members = emptyList()
     )
     val dummyUsers = listOf(
-        User("1", "Aman Gupta", "addr1", "123", "aman@mail.com", null, "Working on it!"),
-        User("2", "John Doe", "addr2", "456", "nitin@mail.com", null, "Available")
+        User("1", "Aman Gupta", "addr1", "123", "aman@mail.com", "", "Working on it!"),
+        User("2", "John Doe", "addr2", "456", "nitin@mail.com", "", "Available")
     )
     MaterialTheme {
         ChatGroupDetailViewContent(

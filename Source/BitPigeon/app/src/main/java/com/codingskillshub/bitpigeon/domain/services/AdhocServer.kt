@@ -5,6 +5,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
+import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -92,6 +93,9 @@ class AdhocServer {
             "SEND_CHAT_MESSAGE" -> {
                 relayChatMessage(message, clientId)
             }
+            "SEND_USER_INFO" -> {
+                relayUserInfoUpdate(message, clientId)
+            }
         }
         Log.d("AdhocServer", "Received Client Request Message: $message")
     }
@@ -118,9 +122,17 @@ class AdhocServer {
     fun sendGroupEvent() {
 
     }
-    fun relayUserInfoUpdate() {
-
+    fun relayUserInfoUpdate(message: ActionMessage, clientId: String) {
+        val user = message.data as User
+        for (client in clients) {
+            if (client.user.id != clientId) {
+                serverScope.launch {
+                    serverSocketManager?.sendMessageToClient(message, client.user.id)
+                }
+            }
+        }
     }
+
     fun relayChatMessage(message: ActionMessage, clientId: String) {
         val chatMessage = message.data as ChatMessage
         val roomId = chatMessage.chatGroupId

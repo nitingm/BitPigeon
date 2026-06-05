@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
+import com.codingskillshub.bitpigeon.domain.entities.AppFile
 import com.codingskillshub.bitpigeon.domain.entities.Attachment
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.StoreIn
@@ -193,6 +194,43 @@ class FileTransferService @Inject constructor(
             Log.e("FileTransferService", "Error copying file locally: ${e.message}")
         } finally {
             updateProgress(attachment.id, null)
+        }
+    }
+
+    private suspend fun receiveAppFile(appFile: AppFile, clientId: String) {
+        try {
+
+            val (outputStream, uri) = fileStorageService.getOutputStream(appFile.fileName, appFile.storeIn == StoreIn.PRIVATE_STORAGE)
+
+            outputStream.use { output ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var totalRead = 0L
+                while (totalRead < appFile.fileSize) {
+                    val toRead = if (appFile.fileSize - totalRead < BUFFER_SIZE.toLong()) {
+                        (appFile.fileSize - totalRead).toInt()
+                    } else {
+                        BUFFER_SIZE
+                    }
+
+                    val bytesRead = serverSocketManager?.readBytesFromClient(clientId, buffer, toRead) ?: -1
+                    if (bytesRead <= 0) break
+
+                    output.write(buffer, 0, bytesRead)
+                    totalRead += bytesRead
+
+                    val progress = if (appFile.fileSize > 0) (totalRead * 100 / appFile.fileSize).toInt() else 100
+                    updateProgress(appFile.id, progress)
+                }
+            }
+            if (appFile.storeIn == StoreIn.PUBLIC_STORAGE) {
+                fileStorageService.finalizeFile(uri)
+            }
+            Log.d("FileTransferService", "File received successfully: $uri")
+        } catch (e: Exception) {
+            Log.e("FileTransferService", "Error receiving file: ${e.message}")
+            attachmentDao.updateTransferStatus(appFile.id, TransferStatus.FAILED)
+        } finally {
+            waitForIncomingFileFromClient(clientId)
         }
     }
 

@@ -3,9 +3,11 @@ package com.codingskillshub.bitpigeon.ui.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.codingskillshub.bitpigeon.common.DateTimeUtil
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
+import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +25,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ChatGroupListViewModel @Inject constructor(
-    private val conversationModel: ConversationModel
+    private val conversationModel: ConversationModel,
+    private val dateTimeUtil: DateTimeUtil
 ) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -41,7 +44,6 @@ class ChatGroupListViewModel @Inject constructor(
      * We convert the Flow from the Model into a StateFlow here so it stays active
      * while the ViewModel is alive.
      */
-
     @OptIn(ExperimentalCoroutinesApi::class)
     val conversations: StateFlow<List<ChatGroup>> = conversationModel.getAllConversations()
         .flatMapLatest { list: List<ChatGroup> ->
@@ -49,14 +51,19 @@ class ChatGroupListViewModel @Inject constructor(
                 flowOf(emptyList<ChatGroup>())
             } else {
                 val flows: List<Flow<ChatGroup>> = list.map { chat ->
-                    if (chat.group.type == ChatGroupType.DIRECT) {
+                    val chatModified = chat.copy(timestamp = dateTimeUtil.toFriendlyDate(chat.timestamp))
+                    if (chatModified.group.type == ChatGroupType.DIRECT || chatModified.group.type == ChatGroupType.PERSONAL) {
+                        val appendText = if (chatModified.group.type == ChatGroupType.PERSONAL) " (You)" else ""
                         // assumes userDao.getUserById returns Flow<User?>
-                        conversationModel.getUserById(chat.group.name)
+                        conversationModel.getUserById(chatModified.group.name)
                             .map { user -> 
-                                if (user != null) chat.copy(group = chat.group.copy(name = user.name)) else chat 
+                                if (user != null) chatModified.copy(group = chatModified.group.copy(
+                                    name = user.name + appendText,
+                                    profilePicture = user.profilePicturePath
+                                )) else chatModified
                             }
                     } else {
-                        flowOf(chat)
+                        flowOf(chatModified)
                     }
                 }
                 combine(flows) { it.toList() }

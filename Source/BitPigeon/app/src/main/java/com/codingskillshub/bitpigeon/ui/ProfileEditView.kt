@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,17 +55,23 @@ fun ProfileEditView(
     onNavigateBack: () -> Unit,
     profileViewModel: ProfileViewModel = hiltViewModel()
 ) {
+    val userName by profileViewModel.userName.collectAsState()
+    val phoneNumber by profileViewModel.phoneNumber.collectAsState()
+    val emailAddress by profileViewModel.emailAddress.collectAsState()
+    val statusLabel by profileViewModel.statusLabel.collectAsState()
     ProfileEditViewContent(
-        profileViewModel.userName.collectAsState().value ,
-        profileViewModel.phoneNumber.collectAsState().value,
-        profileViewModel.emailAddress.collectAsState().value,
-        profileViewModel.statusLabel.collectAsState().value,
-        onNavigateBack,
-        { updatedUser ->
+        name = userName ,
+        phoneNumber = phoneNumber,
+        emailAddress = emailAddress,
+        statusLabel = statusLabel,
+        onNavigateBack = onNavigateBack,
+        onSaveClick = { updatedUser ->
             profileViewModel.updateUserName(updatedUser.name)
             profileViewModel.updatePhoneNumber(updatedUser.phoneNumber)
             profileViewModel.updateEmailAddress(updatedUser.email)
             profileViewModel.updateStatus(updatedUser.status)
+
+            onNavigateBack()
         }
     )
 }
@@ -80,10 +87,18 @@ fun ProfileEditViewContent(
     onSaveClick: (User) -> Unit
 ) {
     // Local state for form fields
-    var name by remember { mutableStateOf(name) }
-    var phoneNumber by remember { mutableStateOf(phoneNumber) }
-    var email by remember { mutableStateOf(emailAddress) }
-    var status by remember { mutableStateOf(statusLabel) }
+    var localName by remember { mutableStateOf(name) }
+    var localPhoneNumber by remember { mutableStateOf(phoneNumber) }
+    var localEmail by remember { mutableStateOf(emailAddress) }
+    var localStatus by remember { mutableStateOf(statusLabel) }
+
+    // Update state when parameters change
+    LaunchedEffect(name, phoneNumber, emailAddress, statusLabel) {
+        localName = name
+        localPhoneNumber = phoneNumber
+        localEmail = emailAddress
+        localStatus = statusLabel
+    }
 
     Scaffold(
         topBar = {
@@ -99,12 +114,12 @@ fun ProfileEditViewContent(
                         // Create updated user object and pass back
                         onSaveClick(
                             User(
-                                "none",
-                                name,
-                                "none",
-                                phoneNumber,
-                                email,
-                                status = status
+                                id = "none",
+                                name = localName,
+                                deviceAddress = "none",
+                                phoneNumber = localPhoneNumber,
+                                email = localEmail,
+                                status = localStatus
                             )
                         )
                     }) {
@@ -123,14 +138,14 @@ fun ProfileEditViewContent(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Form Fields
             EditField(
                 label = "Full Name",
-                value = name,
-                onValueChange = { name = it },
+                value = localName,
+                onValueChange = { localName = it },
                 icon = Icons.Default.Badge
             )
 
@@ -138,8 +153,8 @@ fun ProfileEditViewContent(
 
             EditField(
                 label = "Status",
-                value = status,
-                onValueChange = { status = it },
+                value = localStatus,
+                onValueChange = { localStatus = it },
                 icon = Icons.Default.Info,
                 placeholder = "Hey there! I am using BitPigeon"
             )
@@ -148,8 +163,8 @@ fun ProfileEditViewContent(
 
             EditField(
                 label = "Phone Number",
-                value = phoneNumber,
-                onValueChange = { phoneNumber = it },
+                value = localPhoneNumber,
+                onValueChange = { localPhoneNumber = it },
                 icon = Icons.Default.Phone
             )
 
@@ -157,8 +172,8 @@ fun ProfileEditViewContent(
 
             EditField(
                 label = "Email Address",
-                value = email,
-                onValueChange = { email = it },
+                value = localEmail,
+                onValueChange = { localEmail = it },
                 icon = Icons.Default.Email
             )
 

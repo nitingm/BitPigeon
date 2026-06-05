@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 import javax.inject.Inject
@@ -71,10 +72,11 @@ class ConfigurationService @Inject constructor(
                 // Generate only if it does not exist
                 val newId = UUID.randomUUID().toString()
                 preferences[USER_ID_KEY] = newId
+                Log.d("ConfigurationService", "Generated new Unique P2P ID: $newId")
             }
 
         }
-        Log.d("ConfigurationService", "My Unique P2P ID is: $userIdFlow.value")
+        Log.d("ConfigurationService", "My Unique P2P ID is: ${userIdFlow.firstOrNull()}")
     }
 
 }

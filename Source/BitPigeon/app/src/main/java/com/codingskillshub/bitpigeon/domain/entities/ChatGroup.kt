@@ -17,7 +17,8 @@ enum class ChatGroupType : Serializable {
 data class ChatGroupDb (
     @PrimaryKey val id: String,
     val name: String,
-    val type: ChatGroupType = ChatGroupType.DIRECT
+    val type: ChatGroupType = ChatGroupType.DIRECT,
+    val profilePicture: String = ""
 ) : Serializable {}
 
 

@@ -57,6 +57,7 @@ fun SearchChatGroupViewContent(
     onBackClick: () -> Unit
 ) {
     Scaffold(
+        modifier = Modifier.systemBarsPadding(),
         topBar = {
             // Using the SearchBar we customized earlier
             SearchBar(
@@ -81,6 +82,7 @@ fun SearchChatGroupViewContent(
                     name = chatGroup.group.name,
                     lastMessage = "",
                     timestamp = "",
+                    profilePictureUri = chatGroup.group.profilePicture,
                     onClick = { onChatClick(chatGroup.group.id) }
                 )
                 HorizontalDivider(

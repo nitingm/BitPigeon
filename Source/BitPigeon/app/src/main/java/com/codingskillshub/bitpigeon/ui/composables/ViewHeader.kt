@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.SubcomposeAsyncImage
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,7 +50,7 @@ fun ViewHeader(
     // Profile/Leading Image
     showLeadingImage: Boolean = false,
     leadingImageEnabled: Boolean = true,
-    leadingImageRes: Int? = null, // Resource ID for the image
+    leadingImageUri: String? = null, // Resource ID for the image
     onLeadingImageClick: () -> Unit = {},
 
     // Action Icons (Right)
@@ -75,14 +77,20 @@ fun ViewHeader(
                         enabled = leadingImageEnabled,
                         modifier = Modifier.size(40.dp)
                     ) {
-                        if (leadingImageRes != null) {
-                            Image(
-                                painter = painterResource(id = leadingImageRes),
-                                contentDescription = "Header Image",
+                        if (leadingImageUri != null) {
+                            SubcomposeAsyncImage(
+                                model = leadingImageUri,
+                                contentDescription = "Profile Picture",
+                                modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
+                                error = {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Profile Picture",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             )
                         } else {
                             // Fallback if no image res provided

@@ -88,6 +88,10 @@ class OnlineChatService @Inject constructor(
         chatClient?.createDirectChat(chatGroup)
     }
 
+    fun sendUserInfoUpdate(user: User) {
+        chatClient?.sendUserInfoUpdate(user)
+    }
+
     private fun startServer() {
         if (adhocServer == null) {
             Log.d("OnlineChatService", "Starting AdhocServer on port $PORT")

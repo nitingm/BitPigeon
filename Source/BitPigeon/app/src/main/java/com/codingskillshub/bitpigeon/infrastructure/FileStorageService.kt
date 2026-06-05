@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.io.FileOutputStream
@@ -176,6 +177,7 @@ class FileStorageService @Inject constructor(
     
     fun getPrivateFileByName(fileName: String): Pair<String, Uri>? {
         val files = getAllPrivateFiles()
+        Log.d("FileStorageService", "getPrivateFileByName: $files")
         return files.find { filePair -> filePair.first.startsWith(fileName) }
     }
     

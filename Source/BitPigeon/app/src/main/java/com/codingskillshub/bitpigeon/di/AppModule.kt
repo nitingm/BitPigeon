@@ -15,6 +15,7 @@ import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
+import com.codingskillshub.bitpigeon.infrastructure.ImageCroppingService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -54,9 +55,13 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAppSystemModel(
+        userDao: UserDao,
+        imageCroppingService: ImageCroppingService,
+        fileStorageService: FileStorageService,
+        onlineChatService: OnlineChatService,
         wifiService: WifiCommunicationService,
         configurationService: ConfigurationService
-    ): AppSystemModel = AppSystemModel(wifiService, configurationService)
+    ): AppSystemModel = AppSystemModel(userDao, imageCroppingService, fileStorageService, onlineChatService, wifiService, configurationService)
 
     @Provides
     @Singleton

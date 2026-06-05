@@ -44,3 +44,18 @@ data class AttachmentPreviewData(
     var isTransferring: Boolean = false,
     var progress: Int = 0
 )
+
+data class AppFile (
+    val id: String,
+    val senderId: String,
+    val fileName: String,
+    val fileSize: Long,
+    val fileType: String,
+    val filePath: String = "",
+    val transferStatus: TransferStatus = TransferStatus.PENDING,
+    val storeIn: StoreIn = StoreIn.PRIVATE_STORAGE
+) : Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}

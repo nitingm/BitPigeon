@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
@@ -39,6 +40,7 @@ fun ChatView(
 ) {
     val messages by chatViewModel.messages.collectAsState()
     val chatGroup by chatViewModel.chatGroup.collectAsState()
+    val isChatOnline by chatViewModel.isChatOnline.collectAsStateWithLifecycle()
 
     val attachmentUris = remember { mutableStateListOf<Uri>() }
 
@@ -49,7 +51,9 @@ fun ChatView(
     }
 
     ChatViewContent(
-        chatPartnerName = chatGroup?.group?.name?: "Unknown",
+        chatPartnerName = chatGroup?.group?.name ?: "Unknown",
+        chatProfilePictureUri = chatGroup?.group?.profilePicture?: "",
+        isChatOnline = isChatOnline,
         messages = messages,
         attachedItems = chatViewModel.getAttachedItems(attachmentUris),
         onSendMessage = { messageText -> run {
@@ -78,6 +82,8 @@ fun ChatView(
 @Composable
 fun ChatViewContent(
     chatPartnerName: String,
+    chatProfilePictureUri: String,
+    isChatOnline: Boolean,
     messages: List<ChatMessageUIExtended>,
     attachedItems: List<AttachmentPreviewData>,
     onSendMessage: (String) -> Unit,
@@ -99,8 +105,9 @@ fun ChatViewContent(
         topBar = {
             ViewHeader(
                 title = chatPartnerName,
-                subtitle = "Active via Wi-Fi Direct",
+                subtitle = if (isChatOnline) "Online" else "Offline",
                 showLeadingImage = true,
+                leadingImageUri  = chatProfilePictureUri,
                 onNavigationClick = {
                     onBackClick()
                 },
@@ -234,6 +241,8 @@ fun ChatViewPreview() {
 
     ChatViewContent(
         chatPartnerName = "Aman Gupta",
+        "",
+        true,
         messages = dummyMessages,
         dummyAttachmentPreviewData,
         {},

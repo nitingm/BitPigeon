@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -71,6 +73,7 @@ fun ProfileView(
     val emailAddress by viewModel.emailAddress.collectAsState()
     val statusLabel by viewModel.statusLabel.collectAsState()
     val profilePictureUri by viewModel.profilePictureUri.collectAsState()
+    val isProfilePictureLoading by viewModel.isSavingProfilePicture.collectAsState()
     var selectedProfilePicture by remember { mutableStateOf<AttachmentPreviewData?>(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -91,11 +94,9 @@ fun ProfileView(
                 onSaveCrop = { sourceUri, fileName, cropBounds, displayW, displayH ->
                     viewModel.saveCroppedProfilePicture(
                         sourceUri = sourceUri,
-                        fileName = fileName,
                         cropBounds = cropBounds,
                         displayWidth = displayW,
                         displayHeight = displayH,
-                        isPrivateStorage = true,
                         onSuccess = { selectedProfilePicture = null }
                     )
                 }
@@ -108,6 +109,7 @@ fun ProfileView(
         emailAddress,
         statusLabel,
         profilePictureUri.toString(),
+        isProfilePictureLoading,
         onEditClick,
         {
             filePickerLauncher.launch("image/*")
@@ -123,6 +125,7 @@ fun ProfileViewContent(
     emailAddress: String,
     statusLabel: String,
     profilePictureUri: String,
+    isProfilePictureLoading: Boolean,
     onEditClick: () -> Unit,
     onEditProfilePictureClick: () -> Unit
 ) {
@@ -143,7 +146,7 @@ fun ProfileViewContent(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 0.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Profile Picture Section
@@ -172,11 +175,25 @@ fun ProfileViewContent(
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            modifier = Modifier.size(80.dp),
+                            modifier = Modifier.size(40.dp),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 )
+                if (isProfilePictureLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(40.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
             }
 
             // Edit FAB for Picture
@@ -201,7 +218,7 @@ fun ProfileViewContent(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 0.dp, bottom = 8.dp)) {
                 // --- HEADER SECTION ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -210,7 +227,7 @@ fun ProfileViewContent(
                 ) {
                     Text(
                         text = "Info",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -219,26 +236,26 @@ fun ProfileViewContent(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Profile",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
                 HorizontalDivider(
-                    modifier = Modifier.padding(bottom = 12.dp),
+                    modifier = Modifier.padding(bottom = 8.dp),
                     thickness = 1.dp,
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                 )
                 
                 ProfileItem(label = "Name", value = userName, icon = Icons.Default.Person)
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                     thickness = 0.5.dp
                 )
 
                 ProfileItem(label = "Status", value = statusLabel, icon = Icons.Default.Info)
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                     thickness = 0.5.dp
                 )
 
@@ -248,7 +265,7 @@ fun ProfileViewContent(
                     icon = Icons.Default.Phone
                 )
                 HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 12.dp),
+                    modifier = Modifier.padding(vertical = 8.dp),
                     thickness = 0.5.dp
                 )
 
@@ -268,9 +285,9 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
             imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column {
             Text(
                 text = label,
@@ -284,7 +301,7 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
                 text = value,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp
+                    fontSize = 12.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -295,5 +312,5 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
 @Preview
 @Composable
 fun ProfileViewPreview() {
-    ProfileViewContent("John Doe", "123-456-789", "john.doe@example.com","Hey there", "", onEditClick = {}, onEditProfilePictureClick = {})
+    ProfileViewContent("John Doe", "123-456-789", "john.doe@example.com","Hey there", "", false, onEditClick = {}, onEditProfilePictureClick = {})
 }

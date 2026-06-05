@@ -22,6 +22,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupDb
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.ChatEntry
+import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
 import com.codingskillshub.bitpigeon.ui.composables.SearchBar
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 
@@ -32,6 +33,22 @@ fun ChatGroupListView(
 ) {
     val conversations by chatGroupListViewModel.conversations.collectAsStateWithLifecycle()
 
+    var showProfilePictureFullscreen by remember { mutableStateOf<Boolean>(false) }
+    var profilePictureUri by remember { mutableStateOf<String>("") }
+
+    // Show the overlay if an attachment is selected
+    if (showProfilePictureFullscreen) {
+        ImageViewOverlay(
+            fileName = "Profile picture",
+            fileType = "image/jpg",
+            fileUri = profilePictureUri,
+            onDismiss = {
+                profilePictureUri = ""
+                showProfilePictureFullscreen = false
+            }
+        )
+    }
+
     ChatGroupListViewContent(
         chatList = conversations,
         onlineChatGroups = chatGroupListViewModel.onlineChatGroupsIds.collectAsStateWithLifecycle().value,
@@ -39,10 +56,14 @@ fun ChatGroupListView(
             // Handle navigation to ChatView
             navController.navigate("chatview/${chat.group.id}")
         },
+        onProfilePictureClick = { profilePicture ->
+            // Show the profile picture in fullscreen
+            profilePictureUri = profilePicture
+            showProfilePictureFullscreen = true
+        },
         onSearchClick = {
             navController.navigate("search_group")
         }
-
     )
 }
 
@@ -51,6 +72,7 @@ fun ChatGroupListViewContent(
     chatList: List<ChatGroup>,
     onlineChatGroups: List<String>,
     onChatClick: (ChatGroup) -> Unit,
+    onProfilePictureClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -80,8 +102,10 @@ fun ChatGroupListViewContent(
                     name = chat.group.name,
                     lastMessage = chat.lastMessage,
                     timestamp = chat.timestamp,
+                    profilePictureUri = chat.group.profilePicture,
                     isOnline = (chat.group.id in onlineChatGroups),
-                    onClick = { onChatClick(chat) }
+                    onClick = { onChatClick(chat) },
+                    onProfilePictureClick = { onProfilePictureClick(chat.group.profilePicture) }
                 )
             }
         }
@@ -106,6 +130,7 @@ fun ChatGroupListViewPreview() {
             chatList = sampleChats,
             onlineChatGroups = sampleOnlineChats,
             onChatClick = { /* Handle navigation */ },
+            onProfilePictureClick = { /* Handle profile picture click */ },
             onSearchClick = { /* Handle search */ }
         )
     }

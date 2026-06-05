@@ -1,7 +1,11 @@
 package com.codingskillshub.bitpigeon.ui.composables
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,47 +39,63 @@ fun SearchBar(
     modifier: Modifier = Modifier
 ) {
     // We use OutlinedTextField for a modern "Bar" look
-    OutlinedTextField(
-        value = query,
-        onValueChange = {
-            onQueryChange(it)
-        },
-        modifier = modifier
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable { onSearchClick() }, // Slot to handle opening search view
-        placeholder = {
-            Text(
-                text = placeholderText,
-                style = MaterialTheme.typography.bodyLarge
-            )
-        },
-        leadingIcon = {
-            // Material Search icon acts as the "binocular" equivalent/standard search icon
-            IconButton(
-                onClick = {
-                    if (isSearchView) onBackClick() else onSearchClick()
-                }
-            ) {
-                Icon(
-                    imageVector = if (isSearchView) Icons.AutoMirrored.Filled.KeyboardBackspace else Icons.Default.Search,
-                    contentDescription = "Search Icon",
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+            .height(IntrinsicSize.Min)
+    ) {
+        OutlinedTextField(
+            value = query,
+            readOnly = !isSearchView,
+            onValueChange = {
+                onQueryChange(it)
+            },
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            placeholder = {
+                Text(
+                    text = placeholderText,
+                    style = MaterialTheme.typography.bodyLarge
                 )
+            },
+            leadingIcon = {
+                // Material Search icon acts as the "binocular" equivalent/standard search icon
+                IconButton(
+                    onClick = {
+                        if (isSearchView) onBackClick() else onSearchClick()
+                    }
+                ) {
+                    Icon(
+                        imageVector = if (isSearchView) Icons.AutoMirrored.Filled.KeyboardBackspace else Icons.Default.Search,
+                        contentDescription = "Search Icon",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            shape = RoundedCornerShape(28.dp), // Makes it look like a pill/bar
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+            ),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge
+        )
+        if (!isSearchView) {
+            Box (
+                modifier = modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .clickable(onClick = { onSearchClick() })
+            ) {
+                // Empty box to capture clicks when not in search view
             }
-        },
-        shape = RoundedCornerShape(28.dp), // Makes it look like a pill/bar
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            focusedBorderColor = Color.Transparent,
-            unfocusedBorderColor = Color.Transparent,
-        ),
-        singleLine = true,
-        textStyle = MaterialTheme.typography.bodyLarge
-    )
+        }
+    }
 }
 
 @Preview(showBackground = true)
