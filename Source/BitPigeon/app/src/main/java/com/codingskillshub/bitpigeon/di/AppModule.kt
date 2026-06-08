@@ -57,11 +57,14 @@ object AppModule {
     fun provideAppSystemModel(
         userDao: UserDao,
         imageCroppingService: ImageCroppingService,
+        fileTransferService: FileTransferService,
         fileStorageService: FileStorageService,
         onlineChatService: OnlineChatService,
         wifiService: WifiCommunicationService,
-        configurationService: ConfigurationService
-    ): AppSystemModel = AppSystemModel(userDao, imageCroppingService, fileStorageService, onlineChatService, wifiService, configurationService)
+        hashService: HashService,
+        configurationService: ConfigurationService,
+        @ApplicationContext context: Context
+    ): AppSystemModel = AppSystemModel(userDao, imageCroppingService, fileStorageService, fileTransferService, onlineChatService, wifiService, hashService, configurationService, context)
 
     @Provides
     @Singleton

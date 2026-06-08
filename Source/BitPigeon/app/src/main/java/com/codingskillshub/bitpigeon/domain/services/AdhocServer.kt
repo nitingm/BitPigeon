@@ -5,6 +5,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
+import com.codingskillshub.bitpigeon.domain.entities.AppFileRequest
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import kotlinx.coroutines.CoroutineScope
@@ -96,6 +97,9 @@ class AdhocServer {
             "SEND_USER_INFO" -> {
                 relayUserInfoUpdate(message, clientId)
             }
+            "GET_PROFILE_PICTURE" -> {
+                relayGetProfilePictureRequest(message, clientId)
+            }
         }
         Log.d("AdhocServer", "Received Client Request Message: $message")
     }
@@ -130,6 +134,19 @@ class AdhocServer {
                     serverSocketManager?.sendMessageToClient(message, client.user.id)
                 }
             }
+        }
+    }
+
+    fun relayGetProfilePictureRequest(message: ActionMessage, clientId: String) {
+        val appFileRequest = message.data as AppFileRequest
+        val requestToUserId = appFileRequest.requestToUserId
+        val client = clients.find { it.user.id == requestToUserId }
+        if (client != null) {
+            serverScope.launch {
+                serverSocketManager?.sendMessageToClient(message, client.user.id)
+            }
+        } else {
+            Log.e("AdhocServer","GetProfilePicture request failed: user $requestToUserId not found")
         }
     }
 

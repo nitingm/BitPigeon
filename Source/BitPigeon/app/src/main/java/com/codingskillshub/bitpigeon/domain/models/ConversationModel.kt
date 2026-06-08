@@ -64,26 +64,13 @@ class ConversationModel @Inject constructor(
         modelScope.launch {
             onlineChatService.availablePeerClients.collect { clients ->
                 Log.d("ConversationModel", "🔥 Processing ${clients.size} available clients")
-                try {
-                    // ✅ STEP 1: Save discovered users to database first
-                    clients.forEach { client ->
-                        try {
-                            Log.d("ConversationModel", "💾 Saving user to DB: ${client.user.id} - ${client.user.name}")
-                            userDao.insertOrUpdateUser(client.user)
-                        } catch (e: Exception) {
-                            Log.e("ConversationModel", "Failed to save user ${client.user.id}: ${e.message}", e)
-                        }
-                    }
-
-                    // ✅ STEP 2: Use the client.user objects directly (they're already saved)
-                    val users = clients.map { it.user }
-
-                    Log.d("ConversationModel", "✅ Processed ${users.size} users - ${users.map { it.name }}")
-                    _usersOnline.emit(users)
-
-                } catch (e: Exception) {
-                    Log.e("ConversationModel", "❌ Error processing available clients: ${e.message}", e)
+                clients.forEach { client ->
+                    handleUserInfoUpdate(client.user)
                 }
+                val users = clients.map { it.user }
+
+                Log.d("ConversationModel", "✅ Processed ${users.size} users - ${users.map { it.name }}")
+                _usersOnline.emit(users)
             }
         }
         modelScope.launch {
@@ -98,7 +85,7 @@ class ConversationModel @Inject constructor(
         }
         modelScope.launch {
             onlineChatService.incomingUsers.collect { user ->
-                userDao.insertOrUpdateUser(user)
+                handleUserInfoUpdate(user)
             }
         }
     }
@@ -221,5 +208,23 @@ class ConversationModel @Inject constructor(
 
         onlineChatService.syncOnlineChatGroups(groups)
         Log.i("ConversationModel", "Synced online chat groups: $groups")
+    }
+
+    private suspend fun handleUserInfoUpdate(user: User) {
+        Log.d("ConversationModel", "💾 Saving/updating user to DB: ${user.id} - ${user.name}")
+        val existingUser = userDao.getUserById(user.id).firstOrNull()
+        var updatedUser: User = user
+        if (existingUser != null) {
+            val existingProfilePicture = existingUser.profilePicture
+            val newProfilePicture = user.profilePicture
+            if (existingProfilePicture != newProfilePicture) {
+                appSystemModel.getProfilePicture(newProfilePicture, user.id)
+                updatedUser = user.copy(profilePicture = existingProfilePicture)
+            }
+        } else {
+            appSystemModel.getProfilePicture(user.profilePicture, user.id)
+            updatedUser = user.copy(profilePicture = "")
+        }
+        userDao.insertOrUpdateUser(updatedUser)
     }
 }

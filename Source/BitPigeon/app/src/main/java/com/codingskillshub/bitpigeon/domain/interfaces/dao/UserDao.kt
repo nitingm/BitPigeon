@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {
-    @Insert(onConflict = OnConflictStrategy.Companion.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateUser(user: User)
 
     @Query("DELETE FROM users WHERE id = :userId")
@@ -24,7 +24,7 @@ interface UserDao {
     @Query("SELECT * FROM users")
     fun getAllUsers(): Flow<List<User>>
 
-    @Query("UPDATE users SET profilePicturePath = :fileName WHERE id = :userId")
+    @Query("UPDATE users SET profilePicture = :fileName WHERE id = :userId")
     suspend fun updateProfilePicture(userId: String, fileName: String)
 
     @Query("UPDATE users SET name = :name WHERE id = :userId")

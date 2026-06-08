@@ -28,6 +28,10 @@ class HashService @Inject constructor() {
         return hashString(rawString)
     }
 
+    fun generateUniqueId(input: String): String {
+        return hashString(input)
+    }
+
     private fun hashString(input: String): String {
         return java.security.MessageDigest.getInstance("SHA-256")
             .digest(input.toByteArray())

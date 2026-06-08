@@ -29,9 +29,9 @@ fun UserEntry(
             .fillMaxWidth()
             .clickable(onClick = onClick),
         leadingContent = {
-            if (user.profilePicturePath != null) {
+            if (user.profilePicture != "") {
                 AsyncImage(
-                    model = user.profilePicturePath,
+                    model = user.profilePicture,
                     contentDescription = "Profile Picture",
                     modifier = Modifier
                         .size(40.dp)

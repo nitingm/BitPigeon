@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Person
@@ -37,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -59,6 +61,7 @@ import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 import coil3.request.ImageRequest
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
+import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
 import com.codingskillshub.bitpigeon.ui.composables.ProfilePictureEditOverlay
 import com.codingskillshub.bitpigeon.ui.viewmodels.ProfileViewModel
@@ -165,19 +168,26 @@ fun ProfileViewContent(
                     }),
                 contentAlignment = Alignment.Center
             ) {
-
                 SubcomposeAsyncImage(
                     model = profilePictureUri,
                     contentDescription = "Profile Picture",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     error = {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        Surface(
+                            modifier = Modifier.size(120.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                            }
+                        }
                     }
                 )
                 if (isProfilePictureLoading) {
@@ -293,7 +303,8 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 9.sp
+                    fontSize = 9.sp,
+                    lineHeight = 12.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
@@ -301,7 +312,8 @@ fun ProfileItem(label: String, value: String, icon: ImageVector) {
                 text = value,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp
+                    fontSize = 13.sp,
+                    lineHeight = 16.sp
                 ),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

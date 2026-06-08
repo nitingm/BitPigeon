@@ -19,6 +19,7 @@ import com.codingskillshub.bitpigeon.domain.models.ChatModel
 import com.codingskillshub.bitpigeon.domain.models.AttachmentModel
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
+import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -42,6 +43,7 @@ class ChatViewModel @Inject constructor(
     val attachmentModel: AttachmentModel,
     val conversationModel: ConversationModel,
     val configurationService: ConfigurationService,
+    val fileStorageService: FileStorageService,
     val fileTransferService: FileTransferService,
     private val dateTimeUtil: DateTimeUtil,
     savedStateHandle: SavedStateHandle
@@ -134,7 +136,7 @@ class ChatViewModel @Inject constructor(
                         // Replace display name and profile picture with user's information
                         val replacedDb = group.group.copy(
                             name = user.name,
-                            profilePicture = user.profilePicturePath
+                            profilePicture = fileStorageService.getPrivateFileUri(user.profilePicture)
                         )
                         group.copy(group = replacedDb)
                     } else {
@@ -149,13 +151,18 @@ class ChatViewModel @Inject constructor(
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val usersInGroup: StateFlow<List<User>> = chatGroup.flatMapLatest { group ->
-        getUsersInGroup(group)
+        getUsersInGroup(group).map { user ->
+            user.map { user ->
+                user.copy(profilePicture = fileStorageService.getPrivateFileUri(user.profilePicture))
+            }
+        }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val isChatOnline: StateFlow<Boolean> = conversationModel.onlineGroups.flatMapLatest {
         flowOf(it.any { it.group.id == chatId })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

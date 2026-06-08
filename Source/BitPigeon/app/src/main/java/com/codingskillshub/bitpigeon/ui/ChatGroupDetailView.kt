@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -22,9 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import coil3.compose.SubcomposeAsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -34,6 +37,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroupDb
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.ui.composables.AttachmentPreviewEntry
+import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
 import com.codingskillshub.bitpigeon.ui.composables.UserEntry
 import com.codingskillshub.bitpigeon.ui.composables.ViewType
 import com.codingskillshub.bitpigeon.ui.viewmodels.AttachmentViewModel
@@ -78,6 +82,17 @@ fun ChatGroupDetailViewContent(
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
+    var showProfilePictureFullscreen by remember { mutableStateOf<Boolean>(false) }
+
+    // Show the overlay if an attachment is selected
+    if (showProfilePictureFullscreen) {
+        ImageViewOverlay(
+            fileName = "Profile picture",
+            fileType = "image/jpg",
+            fileUri = chatGroup?.group?.profilePicture?: "",
+            onDismiss = { showProfilePictureFullscreen = false }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -103,20 +118,40 @@ fun ChatGroupDetailViewContent(
         ) {
             // 1. Profile Picture in a circular container
             Spacer(modifier = Modifier.height(24.dp))
-            Surface(
-                modifier = Modifier.size(120.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer
+
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clickable( onClick = {
+                        showProfilePictureFullscreen = true
+                    }),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = if (chatGroup?.group?.type == ChatGroupType.GROUP)
-                            Icons.Default.Group else Icons.Default.Person,
-                        contentDescription = "Profile Picture",
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                SubcomposeAsyncImage(
+                    model = chatGroup?.group?.profilePicture?: "",
+                    contentDescription = "Profile Picture",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = {
+                        Surface(
+                            modifier = Modifier.size(120.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (chatGroup?.group?.type == ChatGroupType.GROUP)
+                                        Icons.Default.Group else Icons.Default.Person,
+                                    contentDescription = "Profile Picture",
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                    }
+                )
             }
 
             // 2. GroupName below it

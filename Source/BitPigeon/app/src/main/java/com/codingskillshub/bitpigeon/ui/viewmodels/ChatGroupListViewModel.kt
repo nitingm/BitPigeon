@@ -26,6 +26,7 @@ import javax.inject.Inject
 @HiltViewModel
 class ChatGroupListViewModel @Inject constructor(
     private val conversationModel: ConversationModel,
+    private val fileStorageService: FileStorageService,
     private val dateTimeUtil: DateTimeUtil
 ) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
@@ -35,11 +36,7 @@ class ChatGroupListViewModel @Inject constructor(
         .map { chatGroups -> chatGroups.map { it.group.id } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    init {
-
-    }
-
-    /**
+     /**
      * Raw data stream from the Model.
      * We convert the Flow from the Model into a StateFlow here so it stays active
      * while the ViewModel is alive.
@@ -56,10 +53,10 @@ class ChatGroupListViewModel @Inject constructor(
                         val appendText = if (chatModified.group.type == ChatGroupType.PERSONAL) " (You)" else ""
                         // assumes userDao.getUserById returns Flow<User?>
                         conversationModel.getUserById(chatModified.group.name)
-                            .map { user -> 
+                            .map { user ->
                                 if (user != null) chatModified.copy(group = chatModified.group.copy(
                                     name = user.name + appendText,
-                                    profilePicture = user.profilePicturePath
+                                    profilePicture = fileStorageService.getPrivateFileUri(user.profilePicture)
                                 )) else chatModified
                             }
                     } else {

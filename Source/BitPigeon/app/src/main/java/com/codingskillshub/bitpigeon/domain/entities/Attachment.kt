@@ -45,6 +45,11 @@ data class AttachmentPreviewData(
     var progress: Int = 0
 )
 
+enum class AppFileType: Serializable {
+    PROFILE_PICTURE,
+    UNKNOWN
+}
+
 data class AppFile (
     val id: String,
     val senderId: String,
@@ -52,8 +57,21 @@ data class AppFile (
     val fileSize: Long,
     val fileType: String,
     val filePath: String = "",
+    val appFileType: AppFileType = AppFileType.UNKNOWN,
     val transferStatus: TransferStatus = TransferStatus.PENDING,
     val storeIn: StoreIn = StoreIn.PRIVATE_STORAGE
+) : Serializable {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
+
+data class AppFileRequest (
+    val id: String,
+    val senderId: String,
+    val requestToUserId: String, //peer clientId
+    val fileName: String,
+    val appFileType: AppFileType = AppFileType.UNKNOWN,
 ) : Serializable {
     companion object {
         private const val serialVersionUID: Long = 1L

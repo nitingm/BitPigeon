@@ -12,7 +12,7 @@ data class User(
     val deviceAddress: String,
     val phoneNumber: String,
     val email: String,
-    val profilePicturePath: String = ""
+    val profilePicture: String = ""
 ) : Serializable {
     @Ignore
     var status: String = "Hey there i'm using BitPigeon"
@@ -23,9 +23,9 @@ data class User(
         deviceAddress: String,
         phoneNumber: String,
         email: String,
-        profilePicturePath: String = "",
+        profilePicture: String = "",
         status: String
-    ) : this(id, name, deviceAddress, phoneNumber, email, profilePicturePath) {
+    ) : this(id, name, deviceAddress, phoneNumber, email, profilePicture) {
         this.status = status
     }
 

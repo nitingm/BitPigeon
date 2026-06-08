@@ -2,10 +2,12 @@ package com.codingskillshub.bitpigeon.domain.services
 
 import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
+import com.codingskillshub.bitpigeon.domain.entities.AppFileRequest
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +26,7 @@ import javax.inject.Singleton
 
 @Singleton
 class OnlineChatService @Inject constructor(
+    private val userDao: UserDao,
     private val wifiCommunicationService: WifiCommunicationService,
     private val configurationService: ConfigurationService
 ) {
@@ -41,6 +44,9 @@ class OnlineChatService @Inject constructor(
     private val _incomingNewChatGroup = MutableSharedFlow<ChatGroup>()
     val incomingNewChatGroup = _incomingNewChatGroup.asSharedFlow()
 
+    private val _incomingGetProfilePictureRequest = MutableSharedFlow<AppFileRequest>()
+    val incomingGetProfilePictureRequest = _incomingGetProfilePictureRequest.asSharedFlow()
+
     private var adhocServer: AdhocServer? = null
     private var chatClient: ChatClient? = null
 
@@ -53,8 +59,9 @@ class OnlineChatService @Inject constructor(
     init {
         serviceScope.launch {
             val myId = configurationService.userIdFlow.firstOrNull() ?: ""
-            val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
-            _selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
+//            val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
+//            _selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
+            _selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
             wifiCommunicationService.startServiceAdvertising(_selfUser)
             wifiCommunicationService.connectionInfo.collectLatest { info ->
                 if (info == null) {
@@ -121,11 +128,17 @@ class OnlineChatService @Inject constructor(
                 }
                 onServerDisconnection = {
                     _availablePeerClients.value = emptyList()
+                    chatClient = null
                     wifiCommunicationService.startServiceAdvertising(_selfUser)
                 }
                 onUserInfoReceived = { user ->
                     serviceScope.launch {
                         _incomingUsers.emit(user)
+                    }
+                }
+                onGetProfilePictureRequest = { appFileRequest ->
+                    serviceScope.launch {
+                        _incomingGetProfilePictureRequest.emit(appFileRequest)
                     }
                 }
             }
@@ -139,6 +152,14 @@ class OnlineChatService @Inject constructor(
 
     fun syncOnlineChatGroups(groups: List<ChatGroup>) {
         chatClient?.syncChatGroupsWithServer(groups)
+    }
+
+    fun sendGetProfilePictureRequest(appFileRequest: AppFileRequest) {
+        chatClient?.getProfilePicture(appFileRequest)
+    }
+
+    fun getPeerClientById(clientId: String): Client? {
+        return availablePeerClients.value.find { it.user.id == clientId }
     }
 
     private fun stopAll() {

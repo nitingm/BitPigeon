@@ -88,7 +88,7 @@ class WifiCommunicationService @Inject constructor(
         if (enabled) {
             if (hasWifiDirectPermissions()) {
 //                discoverPeers()
-                startServiceDiscovery()
+//                startServiceDiscovery()
             } else {
                 Log.w("WifiCommService", "Skipping discovery: Permissions not yet granted.")
             }
@@ -207,17 +207,20 @@ class WifiCommunicationService @Inject constructor(
     @SuppressLint("MissingPermission")
     fun startServiceAdvertising(user: User, isServer: Boolean = false) {
         if (!hasWifiDirectPermissions() || isServiceAdvertising) return
-
-        val gson = Gson()
-        val userJson = gson.toJson(user)
+        this.user = user
 
         val record = mapOf(
             "serviceName" to SERVICE_NAME,
             "version" to "1.0",
             "deviceName" to (_deviceName.value.takeIf { it != "Unknown Device" } ?: "BitPigeon User"),
-            "userInfo" to userJson,
+            "userId" to user.id,
+            "userName" to user.name,
+            "userPhone" to user.phoneNumber,
+            "userEmail" to user.email,
+            "userPP" to user.profilePicture,
+            "userStatus" to user.status,
             "isServer" to isServer.toString()
-        )
+        ).toSafeTxtRecord()
 
         val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME+user.id, SERVICE_TYPE, record)
 
@@ -277,11 +280,18 @@ class WifiCommunicationService @Inject constructor(
                 Log.d("WifiCommService", "TXT record for ${device.deviceName}: $txtRecordMap")
 
                 // Parse user info from TXT record
-                val userInfoJson = txtRecordMap["userInfo"]
-                if (userInfoJson != null) {
+                val userId = txtRecordMap["userId"]
+                if (userId != null) {
                     try {
-                        val gson = Gson()
-                        val user = gson.fromJson(userInfoJson, User::class.java)
+                        val user = User(
+                            id = userId,
+                            name = txtRecordMap["userName"] ?: "",
+                            deviceAddress = device.deviceAddress,
+                            phoneNumber = txtRecordMap["userPhone"] ?: "",
+                            email = txtRecordMap["userEmail"] ?: "",
+                            profilePicture = txtRecordMap["userPP"] ?: "",
+                            status = txtRecordMap["userStatus"] ?: ""
+                        )
                         val currentUsers = _discoveredUsers.value.toMutableMap()
                         currentUsers[device.deviceAddress] = Pair(user, device)
                         _discoveredUsers.value = currentUsers
@@ -385,18 +395,25 @@ class WifiCommunicationService @Inject constructor(
         // Set up service response listeners
         manager.setDnsSdResponseListeners(channel,
             { instanceName, registrationType, device ->
-                if (instanceName == SERVICE_NAME && registrationType == SERVICE_TYPE) {
+                if (instanceName.startsWith(SERVICE_NAME) && registrationType == SERVICE_TYPE) {
                     val currentServices = _discoveredServices.value.toMutableMap()
                     currentServices[device.deviceAddress] = device
                     _discoveredServices.value = currentServices
                 }
             },
             { fullDomainName, txtRecordMap, device ->
-                val userInfoJson = txtRecordMap["userInfo"]
-                if (userInfoJson != null) {
+                val userId = txtRecordMap["userId"]
+                if (userId != null) {
                     try {
-                        val gson = Gson()
-                        val user = gson.fromJson(userInfoJson, User::class.java)
+                        val user = User(
+                            id = userId,
+                            name = txtRecordMap["userName"] ?: "",
+                            deviceAddress = device.deviceAddress,
+                            phoneNumber = txtRecordMap["userPhone"] ?: "",
+                            email = txtRecordMap["userEmail"] ?: "",
+                            profilePicture = txtRecordMap["userPP"] ?: "",
+                            status = txtRecordMap["userStatus"] ?: ""
+                        )
                         val currentUsers = _discoveredUsers.value.toMutableMap()
                         currentUsers[device.deviceAddress] = Pair(user, device)
                         _discoveredUsers.value = currentUsers
@@ -456,6 +473,28 @@ class WifiCommunicationService @Inject constructor(
         }
         
         Log.d("WifiCommService", "Refresh cycle completed")
+    }
+
+    private fun Map<String, String>.toSafeTxtRecord(): Map<String, String> {
+        return this.mapValues { (key, value) ->
+            val keyBytes = key.toByteArray(Charsets.UTF_8)
+            // RFC 6763: Each TXT record string (key=value) is limited to 255 bytes.
+            // overhead: 1 byte for '='.
+            val maxAvailableValueBytes = 255 - keyBytes.size - 1
+
+            if (maxAvailableValueBytes <= 0) return@mapValues ""
+
+            val valueBytes = value.toByteArray(Charsets.UTF_8)
+            if (valueBytes.size > maxAvailableValueBytes) {
+                var truncatedValue = value
+                while (truncatedValue.toByteArray(Charsets.UTF_8).size > maxAvailableValueBytes && truncatedValue.isNotEmpty()) {
+                    truncatedValue = truncatedValue.dropLast(1)
+                }
+                truncatedValue
+            } else {
+                value
+            }
+        }
     }
 
     private fun hasWifiDirectPermissions(): Boolean {

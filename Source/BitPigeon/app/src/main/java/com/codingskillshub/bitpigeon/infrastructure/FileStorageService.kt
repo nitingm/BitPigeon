@@ -199,4 +199,11 @@ class FileStorageService @Inject constructor(
             ?.map { file -> Pair(file.name, Uri.fromFile(file)) } 
             ?: emptyList()
     }
+
+    fun getPrivateFileUri(fileName: String): String {
+        val directory = File(context.getExternalFilesDir(null), "BitPigeon")
+        if (!directory.exists()) if (!directory.exists()) directory.mkdirs()
+        val file = File(directory, fileName)
+        return Uri.fromFile(file).toString()
+    }
 }

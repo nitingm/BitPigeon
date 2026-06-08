@@ -6,12 +6,14 @@ import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import com.codingskillshub.bitpigeon.domain.entities.AppFile
+import com.codingskillshub.bitpigeon.domain.entities.AppFileRequest
 import com.codingskillshub.bitpigeon.domain.entities.Attachment
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.StoreIn
 import com.codingskillshub.bitpigeon.domain.entities.TransferStatus
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.AttachmentDao
+import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
 import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
 import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
@@ -19,8 +21,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
@@ -28,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.sql.ClientInfoStatus
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,6 +42,7 @@ class FileTransferService @Inject constructor(
     @ApplicationContext private val context: Context,
     private val configurationService: ConfigurationService,
     private val attachmentDao: AttachmentDao,
+    private val userDao: UserDao,
     private val fileStorageService: FileStorageService
 ) {
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -49,6 +55,9 @@ class FileTransferService @Inject constructor(
     private val _transferProgress = MutableStateFlow<List<Pair<String, Int>>>(emptyList())
     val transferProgress: StateFlow<List<Pair<String, Int>>> = _transferProgress.asStateFlow()
 
+    private val _incomingAppFile = MutableSharedFlow<AppFile>()
+    val incomingAppFile = _incomingAppFile.asSharedFlow()
+
     companion object {
         private const val PORT = 8889
         private const val BUFFER_SIZE = 4096
@@ -58,7 +67,7 @@ class FileTransferService @Inject constructor(
         serviceScope.launch {
             val myId = configurationService.userIdFlow.firstOrNull() ?: ""
             val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
-            selfUser = User(id = myId, name = myName, deviceAddress = "", phoneNumber = "", email = "")
+            selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
 
             serverSocketManager = ServerSocketManager(PORT).apply {
                 onClientConnected = { client -> handleClientConnection(client) }
@@ -225,12 +234,44 @@ class FileTransferService @Inject constructor(
             if (appFile.storeIn == StoreIn.PUBLIC_STORAGE) {
                 fileStorageService.finalizeFile(uri)
             }
-            Log.d("FileTransferService", "File received successfully: $uri")
+            Log.d("FileTransferService", "App File received successfully: $uri")
+            _incomingAppFile.emit(appFile)
         } catch (e: Exception) {
-            Log.e("FileTransferService", "Error receiving file: ${e.message}")
-            attachmentDao.updateTransferStatus(appFile.id, TransferStatus.FAILED)
+            Log.e("FileTransferService", "Error receiving App file: ${e.message}")
         } finally {
             waitForIncomingFileFromClient(clientId)
+        }
+    }
+
+    suspend fun sendAppFileToClient(appFile: AppFile, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
+        val clientSocketManager = ClientSocketManager()
+        try {
+            Log.d("FileTransferService","Connecting to FileTransfer Client at ${client.ipAddress}:${PORT}")
+            clientSocketManager.connect(client.ipAddress, PORT)
+
+            selfUser?.let { clientSocketManager.sendMessage(it) }
+
+            val actionMessage = ActionMessage("SEND_APP_FILE", appFile)
+            clientSocketManager.sendMessage(actionMessage)
+
+            context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
+                val buffer = ByteArray(BUFFER_SIZE)
+                var bytesRead: Int
+                var totalSent = 0L
+                while (input.read(buffer).also { bytesRead = it } != -1) {
+                    clientSocketManager.sendBytes(buffer, bytesRead)
+                    totalSent += bytesRead
+                    val progress = if (appFile.fileSize > 0) (totalSent * 100 / appFile.fileSize).toInt() else 100
+                    updateProgress(appFile.id, progress)
+                }
+                clientSocketManager.flushBuffer()
+            }
+            Log.d("FileTransferService", "File sent successfully to ${client.ipAddress}")
+        } catch (e: Exception) {
+            Log.e("FileTransferService", "Error sending file: ${e.message}")
+        } finally {
+            Log.d("FileTransferService","Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
+            clientSocketManager.disconnect()
         }
     }
 
@@ -253,6 +294,9 @@ class FileTransferService @Inject constructor(
                 if (message.actionType == "SEND_ATTACHMENT") {
                     val attachment = message.data as Attachment
                     receiveFile(attachment, clientId)
+                } else if (message.actionType == "SEND_APP_FILE") {
+                    val appFile = message.data as AppFile
+                    receiveAppFile(appFile, clientId)
                 }
             }
         } else {

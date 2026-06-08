@@ -2,6 +2,8 @@ package com.codingskillshub.bitpigeon.domain.services
 
 import android.util.Log
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
+import com.codingskillshub.bitpigeon.domain.entities.AppFile
+import com.codingskillshub.bitpigeon.domain.entities.AppFileRequest
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
@@ -25,6 +27,8 @@ class ChatClient(
     var onChatMessageReceived: ((ChatMessage) -> Unit)? = null
     var onServerDisconnection: (() -> Unit)? = null
     var onUserInfoReceived: ((User) -> Unit)? = null
+
+    var onGetProfilePictureRequest: ((AppFileRequest) -> Unit)? = null
 
     init {
         clientSocketManager = ClientSocketManager()
@@ -58,6 +62,10 @@ class ChatClient(
             "SEND_USER_INFO" -> {
                 val user = message.data as User
                 handleUserInfoUpdate(user)
+            }
+            "GET_PROFILE_PICTURE" -> {
+                val appFile = message.data as AppFileRequest
+                handleGetProfilePictureRequest(appFile)
             }
         }
     }
@@ -105,6 +113,11 @@ class ChatClient(
         sendRequestMessage(message)
     }
 
+    fun getProfilePicture(appFileRequest: AppFileRequest) {
+        val message = ActionMessage("GET_PROFILE_PICTURE", appFileRequest)
+        sendRequestMessage(message)
+    }
+
     private fun handleAvailableClientsUpdate(data: Any) {
         val clients = data as List<Client>
         onAvailablePeerClientsUpdated?.invoke(clients)
@@ -120,6 +133,10 @@ class ChatClient(
 
     private fun handleUserInfoUpdate(user: User) {
         onUserInfoReceived?.invoke(user)
+    }
+
+    private fun handleGetProfilePictureRequest(appFileRequest: AppFileRequest) {
+        onGetProfilePictureRequest?.invoke(appFileRequest)
     }
 
     private fun handleServerDisconnection() {
