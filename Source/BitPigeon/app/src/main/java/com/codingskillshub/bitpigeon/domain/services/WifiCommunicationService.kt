@@ -2,6 +2,7 @@ package com.codingskillshub.bitpigeon.domain.services
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.NetworkInfo
@@ -18,12 +19,15 @@ import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,10 +48,16 @@ class WifiCommunicationService @Inject constructor(
         private const val SERVICE_NAME = "BitPigeon_Chat_"
     }
 
+    // Keep a reference to the local serviceInfo we registered so removal can use the same object
+    private var localServiceInfo: WifiP2pDnsSdServiceInfo? = null
+
     // 1. Use MutableStateFlow to hold the state
     private val _isWifiEnabled = MutableStateFlow(false)
     // 2. Expose as read-only StateFlow for ViewModels to collect
     val isWifiEnabled: StateFlow<Boolean> = _isWifiEnabled.asStateFlow()
+
+    private val _isWifiDirectServiceAdvertisingEnabled = MutableStateFlow(false)
+    val isWifiDirectServiceAdvertisingEnabled: StateFlow<Boolean> = _isWifiDirectServiceAdvertisingEnabled.asStateFlow()
 
     // 2. State for Discovered Peers
     private val _peers = MutableStateFlow<List<WifiP2pDevice>>(emptyList())
@@ -81,14 +91,68 @@ class WifiCommunicationService @Inject constructor(
 
     private var user: User? = null
 
-    fun updateWifiStatus(enabled: Boolean) {
+    init {
+        disconnectFromAllDevices()
+    }
+
+    fun setUserDetails(user: User) {
+        this.user = user
+    }
+
+    /**
+     * Robust version: Switch between service advertising and discovery with proper sequencing.
+     * When enabled: stops discovery first, then starts advertising.
+     * When disabled: stops advertising first, then starts discovery.
+     * This is a fire-and-forget coroutine function called from UI.
+     *
+     * Note: This function launches in GlobalScope. Consider injecting a CoroutineScope
+     * for better lifecycle management in production code.
+     */
+    fun switchWifiDirectServiceAdvertising(enabled: Boolean) {
+        _isWifiDirectServiceAdvertisingEnabled.value = enabled
+        GlobalScope.launch {
+            try {
+                switchWifiDirectServiceAdvertisingSuspend(enabled)
+            } catch (e: Exception) {
+                Log.e("WifiCommService", "Exception in switchWifiDirectServiceAdvertising: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Suspend version: Sequential switching between service advertising and discovery.
+     * When enabled: stops discovery FIRST, waits for completion, then starts advertising.
+     * When disabled: stops advertising FIRST, waits for completion, then starts discovery.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun switchWifiDirectServiceAdvertisingSuspend(enabled: Boolean) {
+        if (enabled) {
+            Log.d("WifiCommService", "Enabling service advertising: stopping discovery first...")
+            // 1. Stop discovery first and wait for it to complete
+            stopServiceDiscoverySuspend()
+            Log.d("WifiCommService", "Discovery stopped. Now starting service advertising...")
+            // 2. Then start advertising
+            startServiceAdvertisingSuspend(user ?: User("", "", "", "", "", ""))
+            Log.d("WifiCommService", "Service advertising started")
+        } else {
+            Log.d("WifiCommService", "Disabling service advertising: stopping advertising first...")
+            // 1. Stop advertising first and wait for it to complete
+            stopServiceAdvertisingSuspend()
+            Log.d("WifiCommService", "Advertising stopped. Now starting service discovery...")
+            // 2. Then start discovery
+            startServiceDiscoverySuspend()
+            Log.d("WifiCommService", "Service discovery started")
+        }
+    }
+
+    private fun updateWifiStatus(enabled: Boolean) {
         // 3. Updating the value automatically emits a signal to all collectors
         _isWifiEnabled.value = enabled
 
         if (enabled) {
             if (hasWifiDirectPermissions()) {
-//                discoverPeers()
-//                startServiceDiscovery()
+                discoverPeers()
+                startServiceDiscovery()
             } else {
                 Log.w("WifiCommService", "Skipping discovery: Permissions not yet granted.")
             }
@@ -97,6 +161,7 @@ class WifiCommunicationService @Inject constructor(
             _peers.value = emptyList()
             stopServiceAdvertising()
             stopServiceDiscovery()
+            disconnectFromAllDevices()
         }
     }
 
@@ -122,6 +187,7 @@ class WifiCommunicationService @Inject constructor(
                 val refreshedPeers = peerList?.deviceList?.toList() ?: emptyList()
                 _peers.value = refreshedPeers
                 Log.d("WifiCommService", "Found ${refreshedPeers.size} peers")
+                Log.d("WifiCommService", "Peers: ${Gson().toJson(refreshedPeers)}")
             }
         }
     }
@@ -150,9 +216,6 @@ class WifiCommunicationService @Inject constructor(
         _deviceName.value = name
     }
 
-    /**
-     * Call this when a user clicks on a device in the UI list
-     */
     @SuppressLint("MissingPermission")
     fun connectToPeer(device: WifiP2pDevice) {
         if (hasWifiDirectPermissions()) {
@@ -202,11 +265,36 @@ class WifiCommunicationService @Inject constructor(
     // Service Discovery Methods
 
     /**
-     * Start advertising BitPigeon service to other devices
+     * Start advertising BitPigeon service to other devices (async wrapper)
      */
     @SuppressLint("MissingPermission")
     fun startServiceAdvertising(user: User, isServer: Boolean = false) {
-        if (!hasWifiDirectPermissions() || isServiceAdvertising) return
+        GlobalScope.launch {
+            try {
+                startServiceAdvertisingSuspend(user, isServer)
+            } catch (e: Exception) {
+                Log.e("WifiCommService", "Exception in startServiceAdvertising: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Sequential (suspend) version of startServiceAdvertising to ensure it finishes before other operations.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun startServiceAdvertisingSuspend(user: User, isServer: Boolean = false): Boolean = suspendCancellableCoroutine { cont ->
+        if (!hasWifiDirectPermissions()) {
+            Log.w("WifiCommService", "Start advertising failed: Missing permissions")
+            cont.resume(false)
+            return@suspendCancellableCoroutine
+        }
+
+        if (isServiceAdvertising) {
+            Log.d("WifiCommService", "Service advertising already active, resuming immediately")
+            cont.resume(true)
+            return@suspendCancellableCoroutine
+        }
+
         this.user = user
 
         val record = mapOf(
@@ -215,139 +303,112 @@ class WifiCommunicationService @Inject constructor(
             "deviceName" to (_deviceName.value.takeIf { it != "Unknown Device" } ?: "BitPigeon User"),
             "userId" to user.id,
             "userName" to user.name,
-            "userPhone" to user.phoneNumber,
-            "userEmail" to user.email,
-            "userPP" to user.profilePicture,
-            "userStatus" to user.status,
             "isServer" to isServer.toString()
         ).toSafeTxtRecord()
 
-        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME+user.id, SERVICE_TYPE, record)
+        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME + user.id, SERVICE_TYPE, record)
+        // keep reference so removeLocalService gets the same object instance
+        localServiceInfo = serviceInfo
 
         manager.addLocalService(channel, serviceInfo, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 isServiceAdvertising = true
-                Log.d("WifiCommService", "Service advertising started successfully")
+                _isWifiDirectServiceAdvertisingEnabled.value = true
+                onServiceAdvertisingChanged?.invoke(isServiceAdvertising)
+                Log.d("WifiCommService", "Start advertising successful (suspend)")
+                if (cont.isActive) cont.resume(true)
             }
 
             override fun onFailure(reason: Int) {
-                Log.e("WifiCommService", "Service advertising failed: $reason")
+                Log.e("WifiCommService", "Start advertising failed (suspend): $reason")
+                if (cont.isActive) cont.resume(false)
             }
         })
     }
 
     /**
-     * Stop advertising BitPigeon service
+     * Stop advertising BitPigeon service (async wrapper)
      */
     @SuppressLint("MissingPermission")
     fun stopServiceAdvertising() {
-        if (!isServiceAdvertising) return
+        GlobalScope.launch {
+            try {
+                stopServiceAdvertisingSuspend()
+            } catch (e: Exception) {
+                Log.e("WifiCommService", "Exception in stopServiceAdvertising: ${e.message}")
+            }
+        }
+    }
 
-        val serviceInfo = WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME+user?.id, SERVICE_TYPE, emptyMap())
+    /**
+     * Sequential (suspend) version of stopServiceAdvertising to ensure it finishes before starting again.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun stopServiceAdvertisingSuspend(): Boolean = suspendCancellableCoroutine { cont ->
+        if (!isServiceAdvertising) {
+            Log.d("WifiCommService", "Service advertising not active, resuming immediately")
+            cont.resume(true)
+            return@suspendCancellableCoroutine
+        }
+
+        val serviceInfo = localServiceInfo ?: WifiP2pDnsSdServiceInfo.newInstance(SERVICE_NAME + (user?.id ?: ""), SERVICE_TYPE, emptyMap())
         manager.removeLocalService(channel, serviceInfo, object : WifiP2pManager.ActionListener {
             override fun onSuccess() {
                 isServiceAdvertising = false
+                localServiceInfo = null
+                _isWifiDirectServiceAdvertisingEnabled.value = false
                 onServiceAdvertisingChanged?.invoke(isServiceAdvertising)
-                Log.d("WifiCommService", "Service advertising stopped successfully")
+                Log.d("WifiCommService", "Stop advertising successful (suspend)")
+                if (cont.isActive) cont.resume(true)
             }
 
             override fun onFailure(reason: Int) {
-                Log.e("WifiCommService", "Service advertising stop failed: $reason")
-            }
-        })
-    }
-
-    /**
-     * Start discovering BitPigeon services on other devices
-     */
-    @SuppressLint("MissingPermission")
-    fun startServiceDiscovery() {
-        if (!hasWifiDirectPermissions() || isServiceDiscoveryActive) return
-
-        // Set up service response listeners
-        manager.setDnsSdResponseListeners(channel,
-            { instanceName, registrationType, device ->
-                // Called when a service is found
-                Log.d("WifiCommService", "Service found: $instanceName on ${device.deviceName}")
-                if (instanceName.startsWith(SERVICE_NAME) && registrationType == SERVICE_TYPE) {
-                    val currentServices = _discoveredServices.value.toMutableMap()
-                    currentServices[device.deviceAddress] = device
-                    _discoveredServices.value = currentServices
-                }
-            },
-            { fullDomainName, txtRecordMap, device ->
-                // Called when TXT record is available
-                Log.d("WifiCommService", "TXT record for ${device.deviceName}: $txtRecordMap")
-
-                // Parse user info from TXT record
-                val userId = txtRecordMap["userId"]
-                if (userId != null) {
-                    try {
-                        val user = User(
-                            id = userId,
-                            name = txtRecordMap["userName"] ?: "",
-                            deviceAddress = device.deviceAddress,
-                            phoneNumber = txtRecordMap["userPhone"] ?: "",
-                            email = txtRecordMap["userEmail"] ?: "",
-                            profilePicture = txtRecordMap["userPP"] ?: "",
-                            status = txtRecordMap["userStatus"] ?: ""
-                        )
-                        val currentUsers = _discoveredUsers.value.toMutableMap()
-                        currentUsers[device.deviceAddress] = Pair(user, device)
-                        _discoveredUsers.value = currentUsers
-                        Log.d("WifiCommService", "Parsed user info for ${user.name}")
-                    } catch (e: Exception) {
-                        Log.e("WifiCommService", "Failed to parse user info: ${e.message}")
-                    }
-                }
-            }
-        )
-
-        // Create and add service discovery request
-        serviceRequest = WifiP2pDnsSdServiceRequest.newInstance()
-        manager.addServiceRequest(channel, serviceRequest!!, object : WifiP2pManager.ActionListener {
-            override fun onSuccess() {
-                Log.d("WifiCommService", "Service request added successfully")
-                // Now start discovery
-                manager.discoverServices(channel, object : WifiP2pManager.ActionListener {
+                Log.e("WifiCommService", "Stop advertising failed (suspend): $reason. Trying clearLocalServices fallback.")
+                // Fallback: clear all local services
+                manager.clearLocalServices(channel, object : WifiP2pManager.ActionListener {
                     override fun onSuccess() {
-                        isServiceDiscoveryActive = true
-                        Log.d("WifiCommService", "Service discovery started successfully")
+                        isServiceAdvertising = false
+                        localServiceInfo = null
+                        _isWifiDirectServiceAdvertisingEnabled.value = false
+                        onServiceAdvertisingChanged?.invoke(isServiceAdvertising)
+                        Log.d("WifiCommService", "Cleared local services (fallback, suspend)")
+                        if (cont.isActive) cont.resume(true)
                     }
 
                     override fun onFailure(reason: Int) {
-                        Log.e("WifiCommService", "Service discovery failed: $reason")
+                        Log.e("WifiCommService", "Failed to clear local services fallback (suspend): $reason")
+                        if (cont.isActive) cont.resume(false)
                     }
                 })
-            }
-
-            override fun onFailure(reason: Int) {
-                Log.e("WifiCommService", "Service request addition failed: $reason")
             }
         })
     }
 
     /**
-     * Stop service discovery
+     * Start discovering BitPigeon services on other devices (async wrapper)
+     */
+    @SuppressLint("MissingPermission")
+    fun startServiceDiscovery() {
+        GlobalScope.launch {
+            try {
+                startServiceDiscoverySuspend()
+            } catch (e: Exception) {
+                Log.e("WifiCommService", "Exception in startServiceDiscovery: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Stop service discovery (async wrapper)
      */
     @SuppressLint("MissingPermission")
     fun stopServiceDiscovery() {
-        if (!isServiceDiscoveryActive) return
-
-        serviceRequest?.let { request ->
-            manager.removeServiceRequest(channel, request, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() {
-                    isServiceDiscoveryActive = false
-                    serviceRequest = null
-                    _discoveredServices.value = emptyMap()
-                    _discoveredUsers.value = emptyMap()
-                    Log.d("WifiCommService", "Service discovery stopped successfully")
-                }
-
-                override fun onFailure(reason: Int) {
-                    Log.e("WifiCommService", "Service discovery stop failed: $reason")
-                }
-            })
+        GlobalScope.launch {
+            try {
+                stopServiceDiscoverySuspend()
+            } catch (e: Exception) {
+                Log.e("WifiCommService", "Exception in stopServiceDiscovery: ${e.message}")
+            }
         }
     }
 
@@ -395,7 +456,8 @@ class WifiCommunicationService @Inject constructor(
         // Set up service response listeners
         manager.setDnsSdResponseListeners(channel,
             { instanceName, registrationType, device ->
-                if (instanceName.startsWith(SERVICE_NAME) && registrationType == SERVICE_TYPE) {
+                val regTypeMatches = registrationType.contains(SERVICE_TYPE) || registrationType.endsWith(SERVICE_TYPE)
+                if (instanceName.startsWith(SERVICE_NAME) && regTypeMatches) {
                     val currentServices = _discoveredServices.value.toMutableMap()
                     currentServices[device.deviceAddress] = device
                     _discoveredServices.value = currentServices
@@ -409,10 +471,8 @@ class WifiCommunicationService @Inject constructor(
                             id = userId,
                             name = txtRecordMap["userName"] ?: "",
                             deviceAddress = device.deviceAddress,
-                            phoneNumber = txtRecordMap["userPhone"] ?: "",
-                            email = txtRecordMap["userEmail"] ?: "",
-                            profilePicture = txtRecordMap["userPP"] ?: "",
-                            status = txtRecordMap["userStatus"] ?: ""
+                            phoneNumber = "",
+                            email = ""
                         )
                         val currentUsers = _discoveredUsers.value.toMutableMap()
                         currentUsers[device.deviceAddress] = Pair(user, device)
@@ -446,6 +506,7 @@ class WifiCommunicationService @Inject constructor(
                 if (cont.isActive) cont.resume(false)
             }
         })
+        discoverPeers()
     }
 
     /**
@@ -474,6 +535,27 @@ class WifiCommunicationService @Inject constructor(
         
         Log.d("WifiCommService", "Refresh cycle completed")
     }
+    
+    @SuppressLint("MissingPermission")
+    private fun disconnectFromAllDevices() {
+        if (hasWifiDirectPermissions()) {
+            manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Log.d("WifiCommService", "Successfully disconnected from all devices (group removed)")
+                    _connectionInfo.value = null
+                }
+
+                override fun onFailure(reason: Int) {
+                    // Reason 2 is BUSY, often happens if already disconnected or no group exists
+                    if (reason == WifiP2pManager.BUSY) {
+                        Log.d("WifiCommService", "removeGroup failed with BUSY - possibly already disconnected.")
+                    } else {
+                        Log.e("WifiCommService", "Failed to disconnect from devices: $reason")
+                    }
+                }
+            })
+        }
+    }
 
     private fun Map<String, String>.toSafeTxtRecord(): Map<String, String> {
         return this.mapValues { (key, value) ->
@@ -498,9 +580,14 @@ class WifiCommunicationService @Inject constructor(
     }
 
     private fun hasWifiDirectPermissions(): Boolean {
-        val hasLocation = ContextCompat.checkSelfPermission(
+        // Accept either FINE or COARSE as location permission for discovery on older Android
+        val hasFine = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val hasLocation = hasFine || hasCoarse
 
         val hasNearby = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
@@ -509,5 +596,25 @@ class WifiCommunicationService @Inject constructor(
         } else true
 
         return hasLocation && hasNearby
+    }
+
+    fun getWifiDirectBroadcastReceiver(): BroadcastReceiver {
+        return WifiDirectBroadcastReceiver(
+            onStateChanged = { isEnabled ->
+                /* Handle Wi-Fi P2P toggle state */
+                updateWifiStatus(isEnabled)
+            },
+            onPeersChanged = {
+                requestPeers()
+            },
+            onConnectionChanged = { networkInfo ->
+                /* Handle connection/disconnection logic */
+                updateNetworkInfo(networkInfo)
+            },
+            onDeviceChanged = {
+                /* Update local device info */
+
+            }
+        )
     }
 }

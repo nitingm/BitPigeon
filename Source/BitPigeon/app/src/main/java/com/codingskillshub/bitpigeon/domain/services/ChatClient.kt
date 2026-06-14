@@ -12,6 +12,7 @@ import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -72,8 +73,27 @@ class ChatClient(
 
     fun connectToServer(ip: String, port: Int) {
         clientScope.launch {
-            clientSocketManager?.connect(ip, port)
-            clientSocketManager?.sendMessage(selfUser)
+            var connected = false
+            var attempts = 0
+            val maxAttempts = 5
+            
+            while (!connected && attempts < maxAttempts) {
+                try {
+                    clientSocketManager?.connect(ip, port)
+                    clientSocketManager?.sendMessage(selfUser)
+                    connected = true
+                    Log.d("ChatClient", "Successfully connected to server at $ip:$port")
+                } catch (e: Exception) {
+                    attempts++
+                    Log.e("ChatClient", "Connection attempt $attempts failed to $ip:$port: ${e.message}")
+                    if (attempts < maxAttempts) {
+                        delay(1000L * attempts)
+                    } else {
+                        Log.e("ChatClient", "Max connection attempts reached. Giving up.")
+                        handleServerDisconnection()
+                    }
+                }
+            }
         }
     }
 

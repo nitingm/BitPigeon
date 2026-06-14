@@ -148,6 +148,7 @@ class AppSystemModel @Inject constructor(
                     outputStream.close()
                     fileUri?.let { onSuccess(it) }
                     userDao.updateProfilePicture(userId, finalFileName)
+                    onlineChatService.sendUserInfoUpdate(userDao.getUserById(getMyUserId()).firstOrNull()!!)
                 } else {
                     throw Exception("Failed to crop and save image")
                 }
@@ -173,7 +174,9 @@ class AppSystemModel @Inject constructor(
 
                 if (myPPFile != null) {
                     val myPPUri: Uri = myPPFile.second
+                    Log.d("AppSystemModel", "myPPUri = $myPPUri")
                     val appFile = createAppFileFromUri(myPPUri, appFileRequest.id, AppFileType.PROFILE_PICTURE)
+                    Log.d("AppSystemModel", "appFIle = $appFile")
                     appFile?.let {
                         fileTransferService.sendAppFileToClient(appFile, myPPUri.toString(), client)
                     }
@@ -183,29 +186,104 @@ class AppSystemModel @Inject constructor(
     }
 
     private fun createAppFileFromUri(uri: Uri, appFileId: String, appFileType: AppFileType): AppFile? {
-        val contentResolver = context.contentResolver
-        val cursor = contentResolver.query(uri, null, null, null, null)
-        return cursor?.use {
-            if (it.moveToFirst()) {
-                val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
+        return try {
+            val contentResolver = context.contentResolver
 
-                val name = if (nameIndex != -1) it.getString(nameIndex) else "file_${System.currentTimeMillis()}"
-                val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
-                val type = contentResolver.getType(uri) ?: "application/octet-stream"
+            Log.d("AppSystemModel", "createAppFileFromUri called with URI: $uri, scheme: ${uri.scheme}")
 
-                AppFile(
-                    id = appFileId,
-                    senderId = getMyUserId(),
-                    fileName = name,
-                    fileSize = size,
-                    fileType = type,
-                    filePath = uri.toString(),
-                    appFileType = appFileType,
-                    transferStatus = TransferStatus.PENDING,
-                    storeIn = StoreIn.PRIVATE_STORAGE
-                )
-            } else null
+            // Handle file:// URIs directly using File API
+            if (uri.scheme == "file") {
+                val filePath = uri.path
+                Log.d("AppSystemModel", "Processing file:// URI with path: $filePath")
+
+                if (filePath != null) {
+                    val file = java.io.File(filePath)
+                    Log.d("AppSystemModel", "File exists: ${file.exists()}, absolute path: ${file.absolutePath}")
+
+                    if (file.exists()) {
+                        val name = file.name
+                        val size = file.length()
+                        val type = contentResolver.getType(uri) ?: getMimeType(name)
+
+                        Log.d("AppSystemModel", "✓ File URI success: name=$name, size=$size, type=$type")
+
+                        return AppFile(
+                            id = appFileId,
+                            senderId = getMyUserId(),
+                            fileName = name,
+                            fileSize = size,
+                            fileType = type,
+                            filePath = uri.toString(),
+                            appFileType = appFileType,
+                            transferStatus = TransferStatus.PENDING,
+                            storeIn = StoreIn.PRIVATE_STORAGE
+                        )
+                    } else {
+                        Log.w("AppSystemModel", "✗ File does not exist at path: $filePath")
+                        return null
+                    }
+                } else {
+                    Log.w("AppSystemModel", "✗ Failed to extract path from file URI: $uri")
+                    return null
+                }
+            }
+
+            // Handle content:// URIs using ContentResolver
+            Log.d("AppSystemModel", "Processing content:// URI: $uri")
+            val cursor = contentResolver.query(uri, null, null, null, null)
+
+            if (cursor == null) {
+                Log.w("AppSystemModel", "✗ ContentResolver.query() returned null for URI: $uri")
+                return null
+            }
+
+            cursor.use {
+                if (it.moveToFirst()) {
+                    val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = it.getColumnIndex(OpenableColumns.SIZE)
+
+                    val name = if (nameIndex != -1) it.getString(nameIndex) else "file_${System.currentTimeMillis()}"
+                    val size = if (sizeIndex != -1) it.getLong(sizeIndex) else 0L
+                    val type = contentResolver.getType(uri) ?: "application/octet-stream"
+
+                    Log.d("AppSystemModel", "✓ Content URI success: name=$name, size=$size, type=$type")
+
+                    AppFile(
+                        id = appFileId,
+                        senderId = getMyUserId(),
+                        fileName = name,
+                        fileSize = size,
+                        fileType = type,
+                        filePath = uri.toString(),
+                        appFileType = appFileType,
+                        transferStatus = TransferStatus.PENDING,
+                        storeIn = StoreIn.PRIVATE_STORAGE
+                    )
+                } else {
+                    Log.w("AppSystemModel", "✗ Cursor is empty for URI: $uri")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("AppSystemModel", "✗ Exception in createAppFileFromUri for URI: $uri, Error: ${e.message}", e)
+            null
+        }
+    }
+
+    /**
+     * Helper function to determine MIME type from file extension
+     */
+    private fun getMimeType(fileName: String): String {
+        return when {
+            fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") -> "image/jpeg"
+            fileName.endsWith(".png") -> "image/png"
+            fileName.endsWith(".gif") -> "image/gif"
+            fileName.endsWith(".webp") -> "image/webp"
+            fileName.endsWith(".pdf") -> "application/pdf"
+            fileName.endsWith(".txt") -> "text/plain"
+            fileName.endsWith(".mp4") -> "video/mp4"
+            fileName.endsWith(".mp3") -> "audio/mpeg"
+            else -> "application/octet-stream"
         }
     }
 
@@ -214,7 +292,7 @@ class AppSystemModel @Inject constructor(
         val profilePicture = appFile.fileName
         val userId = appFile.senderId
         if (fileStorageService.checkFileExist(profilePicture, profilePicturePath.toUri())) {
-            userDao.updateProfilePicture(userId, profilePicturePath)
+            userDao.updateProfilePicture(userId, profilePicture)
         } else {
             Log.d("AppSystemModel", "${userId}'s profile picture does not exist at: $profilePicturePath")
         }

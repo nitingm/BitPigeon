@@ -28,6 +28,9 @@ class DiscoverViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+
+    val isWifiDirectServiceAdvertisingEnabled: StateFlow<Boolean> = wifiService.isWifiDirectServiceAdvertisingEnabled
+
     private var lastRefreshTime: Long = 0
     private val refreshDebounceMs = 5000L
 
@@ -63,5 +66,9 @@ class DiscoverViewModel @Inject constructor(
                 _isRefreshing.value = false
             }
         }
+    }
+
+    fun switchAdvertising(enabled: Boolean) {
+        wifiService.switchWifiDirectServiceAdvertising(enabled)
     }
 }

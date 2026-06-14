@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
         addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
         addAction(WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        addAction(WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION)
     }
 
     // Define the permissions needed based on Android Version
@@ -119,6 +120,9 @@ class MainActivity : ComponentActivity() {
                 composable("profile_edit") {
                     ProfileEditView(onNavigateBack = { navController.popBackStack() }, profileViewModel)
                 }
+                composable("settings") {
+                    SettingsView(navController, systemViewModel)
+                }
             }
         }
     }
@@ -126,23 +130,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         // 3. The receiver now has access to the initialized manager and channel
-        receiver = WifiDirectBroadcastReceiver(
-            onStateChanged = { isEnabled ->
-                /* Handle Wi-Fi P2P toggle state */
-                wifiService.updateWifiStatus(isEnabled)
-            },
-            onPeersChanged = {
-                wifiService.requestPeers()
-            },
-            onConnectionChanged = { networkInfo ->
-                /* Handle connection/disconnection logic */
-                wifiService.updateNetworkInfo(networkInfo)
-            },
-            onDeviceChanged = {
-                /* Update local device info */
-
-            }
-        )
+        receiver = wifiService.getWifiDirectBroadcastReceiver()
         registerReceiver(receiver, intentFilter)
     }
 

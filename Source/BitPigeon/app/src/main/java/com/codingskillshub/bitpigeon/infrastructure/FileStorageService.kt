@@ -110,6 +110,16 @@ class FileStorageService @Inject constructor(
     }
 
     fun checkFileExist(fileName: String, uri: Uri): Boolean {
+        // Prefer direct filesystem check for file:// URIs (works on all API levels)
+        uri.scheme?.let { scheme ->
+            if (scheme.equals("file", ignoreCase = true)) {
+                val path = uri.path ?: return false
+                val file = File(path)
+                return file.exists() && file.name == fileName
+            }
+        }
+
+        // For content:// URIs on Android Q+ use MediaStore query to validate display name
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val cursor = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
             cursor?.use {
@@ -121,6 +131,7 @@ class FileStorageService @Inject constructor(
                 }
             } ?: false
         } else {
+            // Legacy: try filesystem path if available
             val file = File(uri.path ?: return false)
             file.exists() && file.name == fileName
         }

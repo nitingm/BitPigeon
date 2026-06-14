@@ -62,7 +62,8 @@ class OnlineChatService @Inject constructor(
 //            val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
 //            _selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
             _selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
-            wifiCommunicationService.startServiceAdvertising(_selfUser)
+//            wifiCommunicationService.startServiceAdvertising(_selfUser)
+            wifiCommunicationService.setUserDetails(_selfUser)
             wifiCommunicationService.connectionInfo.collectLatest { info ->
                 if (info == null) {
                     stopAll()

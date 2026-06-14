@@ -98,6 +98,42 @@ class FileTransferService @Inject constructor(
         }
     }
 
+    /**
+     * Get input stream from file:// or content:// URI
+     * @param fileUri The URI string (file:// or content://)
+     * @param functionName The name of the calling function (for logging)
+     * @return InputStream if successful, null otherwise
+     */
+    private fun getInputStream(fileUri: String, functionName: String): java.io.InputStream? {
+        return try {
+            val uri = Uri.parse(fileUri)
+            when {
+                uri.scheme == "file" -> {
+                    Log.d("FileTransferService","[$functionName] Using FileInputStream for file:// URI")
+                    val filePath = uri.path
+                    if (filePath == null) {
+                        Log.e("FileTransferService","[$functionName] ✗ Failed to extract path from file URI: $fileUri")
+                        return null
+                    }
+                    val file = java.io.File(filePath)
+                    if (!file.exists()) {
+                        Log.e("FileTransferService","[$functionName] ✗ File does not exist at path: $filePath")
+                        return null
+                    }
+                    Log.d("FileTransferService","[$functionName] File exists: ${file.absolutePath}, size: ${file.length()} bytes")
+                    java.io.FileInputStream(file)
+                }
+                else -> {
+                    Log.d("FileTransferService","[$functionName] Using ContentResolver for content:// URI")
+                    context.contentResolver.openInputStream(uri)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FileTransferService","[$functionName] ✗ Exception getting input stream: ${e.message}", e)
+            null
+        }
+    }
+
     private suspend fun receiveFile(attachment: Attachment, clientId: String) {
         try {
             attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
@@ -142,9 +178,9 @@ class FileTransferService @Inject constructor(
     suspend fun sendAttachmentToClient(attachment: Attachment, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
         val clientSocketManager = ClientSocketManager()
         try {
-            attachmentDao.insertAttachment(attachment.copy(filePath = fileUri,transferStatus = TransferStatus.TRANSFERRING))
+            attachmentDao.insertAttachment(attachment.copy(filePath = fileUri, transferStatus = TransferStatus.TRANSFERRING))
             updateProgress(attachment.id, 0)
-            Log.d("FileTransferService","Connecting to FileTransfer Server at ${client.ipAddress}:${PORT}")
+            Log.d("FileTransferService","[sendAttachmentToClient] Connecting to FileTransfer Server at ${client.ipAddress}:${PORT}")
             clientSocketManager.connect(client.ipAddress, PORT)
 
             selfUser?.let { clientSocketManager.sendMessage(it) }
@@ -152,25 +188,42 @@ class FileTransferService @Inject constructor(
             val actionMessage = ActionMessage("SEND_ATTACHMENT", attachment)
             clientSocketManager.sendMessage(actionMessage)
 
-            context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
+            Log.d("FileTransferService","[sendAttachmentToClient] File URI: $fileUri, Size: ${attachment.fileSize} bytes")
+            val inputStream = getInputStream(fileUri, "sendAttachmentToClient")
+
+            if (inputStream == null) {
+                Log.e("FileTransferService","[sendAttachmentToClient] ✗ Failed to open input stream for URI: $fileUri")
+                throw Exception("Failed to open input stream")
+            }
+
+            var totalSent = 0L
+            inputStream.use { input ->
                 val buffer = ByteArray(BUFFER_SIZE)
                 var bytesRead: Int
-                var totalSent = 0L
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     clientSocketManager.sendBytes(buffer, bytesRead)
                     totalSent += bytesRead
                     val progress = if (attachment.fileSize > 0) (totalSent * 100 / attachment.fileSize).toInt() else 100
                     updateProgress(attachment.id, progress)
+
+                    if (totalSent % (BUFFER_SIZE.toLong() * 10) == 0L) {
+                        Log.d("FileTransferService","[sendAttachmentToClient] Progress: $totalSent/${attachment.fileSize} bytes ($progress%)")
+                    }
                 }
                 clientSocketManager.flushBuffer()
             }
-            Log.d("FileTransferService", "File sent successfully to ${client.ipAddress}")
+
+            if (totalSent == attachment.fileSize) {
+                Log.d("FileTransferService","[sendAttachmentToClient] ✓ File sent successfully to ${client.ipAddress}. Sent: $totalSent bytes")
+            } else {
+                Log.w("FileTransferService","[sendAttachmentToClient] ⚠ File size mismatch. Expected: ${attachment.fileSize}, Sent: $totalSent bytes")
+            }
             attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.COMPLETED))
         } catch (e: Exception) {
-            Log.e("FileTransferService", "Error sending file: ${e.message}")
+            Log.e("FileTransferService","[sendAttachmentToClient] ✗ Error sending file: ${e.message}", e)
             attachmentDao.updateTransferStatus(attachment.id, TransferStatus.FAILED)
         } finally {
-            Log.d("FileTransferService","Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
+            Log.d("FileTransferService","[sendAttachmentToClient] Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
             clientSocketManager.disconnect()
             updateProgress(attachment.id, null)
         }
@@ -178,10 +231,20 @@ class FileTransferService @Inject constructor(
 
     suspend fun sendAttachmentToLocal(attachment: Attachment, fileUri: String) = withContext(Dispatchers.IO) {
         try {
+            Log.d("FileTransferService","[sendAttachmentToLocal] Starting local copy")
+            Log.d("FileTransferService","[sendAttachmentToLocal] File URI: $fileUri, Size: ${attachment.fileSize} bytes")
+
             updateProgress(attachment.id, 0)
             val (outputStream, uri) = fileStorageService.getOutputStream(attachment.fileName, attachment.storeIn == StoreIn.PRIVATE_STORAGE)
 
-            context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
+            val inputStream = getInputStream(fileUri, "sendAttachmentToLocal")
+
+            if (inputStream == null) {
+                Log.e("FileTransferService","[sendAttachmentToLocal] ✗ Failed to open input stream for URI: $fileUri")
+                throw Exception("Failed to open input stream")
+            }
+
+            inputStream.use { input ->
                 outputStream.use { output ->
                     val buffer = ByteArray(BUFFER_SIZE)
                     var bytesRead: Int
@@ -191,16 +254,21 @@ class FileTransferService @Inject constructor(
                         totalCopied += bytesRead
                         val progress = if (attachment.fileSize > 0) (totalCopied * 100 / attachment.fileSize).toInt() else 100
                         updateProgress(attachment.id, progress)
+
+                        if (totalCopied % (BUFFER_SIZE.toLong() * 10) == 0L) {
+                            Log.d("FileTransferService","[sendAttachmentToLocal] Progress: $totalCopied/${attachment.fileSize} bytes ($progress%)")
+                        }
                     }
                 }
             }
+
             if (attachment.storeIn == StoreIn.PUBLIC_STORAGE) {
                 fileStorageService.finalizeFile(uri)
             }
-            Log.d("FileTransferService", "File copied locally: $uri")
+            Log.d("FileTransferService", "[sendAttachmentToLocal] ✓ File copied locally: $uri")
             attachmentDao.insertAttachment(attachment.copy(filePath = uri.toString(), transferStatus = TransferStatus.COMPLETED))
         } catch (e: Exception) {
-            Log.e("FileTransferService", "Error copying file locally: ${e.message}")
+            Log.e("FileTransferService", "[sendAttachmentToLocal] ✗ Error copying file locally: ${e.message}", e)
         } finally {
             updateProgress(attachment.id, null)
         }
@@ -246,31 +314,50 @@ class FileTransferService @Inject constructor(
     suspend fun sendAppFileToClient(appFile: AppFile, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
         val clientSocketManager = ClientSocketManager()
         try {
-            Log.d("FileTransferService","Connecting to FileTransfer Client at ${client.ipAddress}:${PORT}")
+            Log.d("FileTransferService","[sendAppFileToClient] Starting transfer to ${client.ipAddress}:${PORT}")
+            Log.d("FileTransferService","[sendAppFileToClient] File URI: $fileUri, Size: ${appFile.fileSize} bytes")
+
             clientSocketManager.connect(client.ipAddress, PORT)
+            Log.d("FileTransferService","[sendAppFileToClient] Connected to ${client.ipAddress}:${PORT}")
 
             selfUser?.let { clientSocketManager.sendMessage(it) }
 
             val actionMessage = ActionMessage("SEND_APP_FILE", appFile)
             clientSocketManager.sendMessage(actionMessage)
 
-            context.contentResolver.openInputStream(Uri.parse(fileUri))?.use { input ->
+            val inputStream = getInputStream(fileUri, "sendAppFileToClient")
+
+            if (inputStream == null) {
+                Log.e("FileTransferService","[sendAppFileToClient] ✗ Failed to open input stream for URI: $fileUri")
+                throw Exception("Failed to open input stream")
+            }
+
+            var totalSent = 0L
+            inputStream.use { input ->
                 val buffer = ByteArray(BUFFER_SIZE)
                 var bytesRead: Int
-                var totalSent = 0L
                 while (input.read(buffer).also { bytesRead = it } != -1) {
                     clientSocketManager.sendBytes(buffer, bytesRead)
                     totalSent += bytesRead
                     val progress = if (appFile.fileSize > 0) (totalSent * 100 / appFile.fileSize).toInt() else 100
                     updateProgress(appFile.id, progress)
+
+                    if (totalSent % (BUFFER_SIZE.toLong() * 10) == 0L) {
+                        Log.d("FileTransferService","[sendAppFileToClient] Progress: $totalSent/${appFile.fileSize} bytes ($progress%)")
+                    }
                 }
                 clientSocketManager.flushBuffer()
             }
-            Log.d("FileTransferService", "File sent successfully to ${client.ipAddress}")
+
+            if (totalSent == appFile.fileSize) {
+                Log.d("FileTransferService","[sendAppFileToClient] ✓ File sent successfully to ${client.ipAddress}. Sent: $totalSent bytes")
+            } else {
+                Log.w("FileTransferService","[sendAppFileToClient] ⚠ File size mismatch. Expected: ${appFile.fileSize}, Sent: $totalSent bytes")
+            }
         } catch (e: Exception) {
-            Log.e("FileTransferService", "Error sending file: ${e.message}")
+            Log.e("FileTransferService","[sendAppFileToClient] ✗ Error sending file: ${e.message}", e)
         } finally {
-            Log.d("FileTransferService","Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
+            Log.d("FileTransferService","[sendAppFileToClient] Disconnecting from ${client.ipAddress}:${PORT}")
             clientSocketManager.disconnect()
         }
     }

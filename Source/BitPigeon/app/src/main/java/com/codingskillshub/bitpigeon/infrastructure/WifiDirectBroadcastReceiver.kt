@@ -48,6 +48,10 @@ class WifiDirectBroadcastReceiver(
                 Log.d("WifiDirectBR", "This device changed")
                 onDeviceChanged()
             }
+
+            WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {
+                Log.d("WifiDirectBR", "Discovery changed")
+            }
         }
     }
 }

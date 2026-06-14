@@ -11,13 +11,19 @@ import com.codingskillshub.bitpigeon.domain.entities.MessageData
 import com.codingskillshub.bitpigeon.domain.entities.User
 import java.io.EOFException
 import java.io.IOException
+import java.net.InetSocketAddress
 
 class ClientSocketManager() {
     private var socket: Socket? = null
     private var outStream: ObjectOutputStream? = null
     private var inStream: ObjectInputStream? = null
     private var listeningJob: Job? = null
-    private val clientScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        Log.e("ClientSocketManager", "Unhandled exception in clientScope: ${throwable.message}")
+    }
+    private val clientScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
+    
     @Volatile private var running = false
 
     var onMessageReceived: ((ActionMessage) -> Unit)? = null
@@ -25,9 +31,13 @@ class ClientSocketManager() {
 
     suspend fun connect(host: String, port: Int) = withContext(Dispatchers.IO) {
         try {
-            val s = Socket(host, port)
+            Log.d("ClientSocketManager", "Attempting to connect to $host:$port")
+            val s = Socket()
+            // Setting a timeout can help prevent long hangs, though ECONNREFUSED is usually fast
+            s.connect(InetSocketAddress(host, port), 5000)
             s.keepAlive = true
             socket = s
+            
             val out = ObjectOutputStream(s.getOutputStream())
             outStream = out
             val input = ObjectInputStream(s.getInputStream())
@@ -47,6 +57,8 @@ class ClientSocketManager() {
                         } catch (e: IOException) {
                             Log.e("ClientSocketManager", "Connection lost: ${e.message}")
                             break
+                        } catch (e: ClassNotFoundException) {
+                            Log.e("ClientSocketManager", "Class not found: ${e.message}")
                         }
                     }
                     Log.d("ClientSocketManager", "Listening stopped")
@@ -57,13 +69,16 @@ class ClientSocketManager() {
                 }
             }
         } catch (e: Exception) {
-            Log.e("ClientSocketManager", "Connection error: ${e.message}")
+            Log.e("ClientSocketManager", "Connection error to $host:$port: ${e.message}")
             throw e
         }
     }
 
     suspend fun sendMessage(message: Any) = withContext(Dispatchers.IO) {
-        if (!running) return@withContext
+        if (!running) {
+            Log.w("ClientSocketManager", "Cannot send message, not connected.")
+            return@withContext
+        }
         try {
             outStream?.writeObject(message)
             outStream?.flush()
@@ -113,7 +128,7 @@ class ClientSocketManager() {
         onDisconnected?.invoke()
 
         // Close resources in background to avoid blocking the caller
-        CoroutineScope(Dispatchers.IO).launch {
+        clientScope.launch {
             try { listeningJob?.cancel() } catch (_: Exception) {}
             try { inStream?.close() } catch (_: Exception) {}
             try { outStream?.close() } catch (_: Exception) {}

@@ -1,19 +1,31 @@
 package com.codingskillshub.bitpigeon.ui
 
 import android.net.wifi.p2p.WifiP2pDevice
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.domain.entities.Client
@@ -32,31 +44,61 @@ fun DiscoverView(
     val usersList = discoveredUsers.values.toList()
     val availablePeerClients by discoverViewModel.availableClients.collectAsState()
     val isRefreshing by discoverViewModel.isRefreshing.collectAsState()
+    val isWifiDirectServiceAdvertisingEnabled by discoverViewModel.isWifiDirectServiceAdvertisingEnabled.collectAsState()
 
     discoverViewModel.onChatGroupInvoked = { groupId ->
         navController.navigate("chatview/$groupId")
     }
 
     DiscoverViewContent(
+        isWifiDirectServiceAdvertisingEnabled,
         usersList,
         availablePeerClients,
         isRefreshing,
         onRefresh = { discoverViewModel.refresh() },
         onConnectToPeer = { peer -> discoverViewModel.connectToPeer(peer) },
-        onOpenDirectChat = { user -> discoverViewModel.createAndOpenDirectChat(user) }
+        onOpenDirectChat = { user -> discoverViewModel.createAndOpenDirectChat(user) },
+        onSwitchAdvertising = { enabled -> discoverViewModel.switchAdvertising(enabled)}
     )
 }
 
 @Composable
 fun DiscoverViewContent(
+    isWifiDirectServiceAdvertisingEnabled: Boolean = false,
     usersList: List<Pair<User, WifiP2pDevice>>,
     availablePeerClients: List<Client> = emptyList(),
     isRefreshing: Boolean = false,
     onRefresh: () -> Unit = {},
     onConnectToPeer: (WifiP2pDevice) -> Unit = {},
-    onOpenDirectChat: (User) -> Unit = {}
+    onOpenDirectChat: (User) -> Unit = {},
+    onSwitchAdvertising: (Boolean) -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp, 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.align(Alignment.Center)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+               Text(
+                   text = "Advertise Nearby",
+                   style = MaterialTheme.typography.bodyLarge.copy(
+                       fontWeight = FontWeight.Medium,
+                       fontSize = 15.sp
+                   ),
+                   modifier = Modifier
+                       .weight(1f)
+               )
+                Switch(
+                    checked = isWifiDirectServiceAdvertisingEnabled,
+                    onCheckedChange = { onSwitchAdvertising(!isWifiDirectServiceAdvertisingEnabled) }
+                )
+            }
+        }
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = { onRefresh() },
@@ -78,6 +120,22 @@ fun DiscoverViewContent(
                     }
                 }
 
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .background(color = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = "Discovered Users",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 15.sp
+                            ),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
+                        )
+                    }
+                }
 
                 // 'items' handles the recycling and lazy loading automatically
                 items(
@@ -109,5 +167,5 @@ fun DiscoverViewPreview() {
         Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
     )
 
-    DiscoverViewContent(sampleUsers)
+    DiscoverViewContent(true, sampleUsers)
 }
