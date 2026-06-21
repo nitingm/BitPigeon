@@ -3,6 +3,7 @@ package com.codingskillshub.bitpigeon.domain.models
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.net.toUri
 import com.codingskillshub.bitpigeon.domain.entities.Attachment
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.domain.entities.Client
@@ -130,6 +131,7 @@ class AttachmentModel @Inject constructor(
                     fileName = name,
                     fileSize = size,
                     fileType = type,
+                    filePath = uri.toString(),
                     timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
                     transferStatus = TransferStatus.PENDING
                 )
@@ -193,6 +195,29 @@ class AttachmentModel @Inject constructor(
     suspend fun getAttachmentsForMessage(messageId: String): List<Attachment> {
         return attachmentDao.getAttachmentsForMessageSync(messageId)
     }
+
+    fun getAllMediaAttachmentPreviewData(): Flow<List<AttachmentPreviewData>> {
+        return attachmentDao.getAllAttachmentsSortedByChatGroup().map { attachments ->
+            attachments.mapNotNull { it.toMediaPreviewOrNull() }
+        }
+    }
+
+    private fun Attachment.toMediaPreviewOrNull(): AttachmentPreviewData? {
+        val uri = filePath.toUri()
+        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
+                (fileType.startsWith("image/", ignoreCase = true) ||
+                        fileType.startsWith("video/", ignoreCase = true))
+
+        return if (isLocalImage) {
+            AttachmentPreviewData(
+                id = id,
+                fileName = fileName,
+                fileType = fileType,
+                // Recommendation: Use FileProvider if this URI is shared externally
+                fileUri = uri
+            )
+        } else null
+    }
     
     suspend fun getAttachmentPreviewDataForMessage(messageId: String): List<AttachmentPreviewData> {
         val attachments = attachmentDao.getAttachmentsForMessageSync(messageId)
@@ -225,8 +250,7 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toImagePreviewOrNull(): AttachmentPreviewData? {
-        val uri = Uri.parse(filePath)
-        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
+        val uri = filePath.toUri()
         val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
                 fileType.startsWith("image/", ignoreCase = true)
 
@@ -248,13 +272,11 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toVideoPreviewOrNull(): AttachmentPreviewData? {
-        val uri = Uri.parse(filePath)
+        val uri = filePath.toUri()
+        val isLocalVideo = fileStorageService.checkFileExist(fileName, uri) &&
+                fileType.startsWith("video/", ignoreCase = true)
 
-        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
-        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
-                fileType.startsWith("video/, ignoreCase = true")
-
-        return if (isLocalImage) {
+        return if (isLocalVideo) {
             AttachmentPreviewData(
                 id = id,
                 fileName = fileName,
@@ -272,13 +294,11 @@ class AttachmentModel @Inject constructor(
     }
 
     private fun Attachment.toFilePreviewOrNull(): AttachmentPreviewData? {
-        val uri = Uri.parse(filePath)
+        val uri = filePath.toUri()
+        val isLocalFile = fileStorageService.checkFileExist(fileName, uri) &&
+                fileType.startsWith("application/", ignoreCase = true)
 
-        // Check if it's an image that exists locally but hasn't had its path updated in DB yet
-        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
-                fileType.startsWith("application/, ignoreCase = true")
-
-        return if (isLocalImage) {
+        return if (isLocalFile) {
             AttachmentPreviewData(
                 id = id,
                 fileName = fileName,

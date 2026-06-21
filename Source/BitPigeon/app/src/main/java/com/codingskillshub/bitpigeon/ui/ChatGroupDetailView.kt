@@ -38,6 +38,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.ui.composables.AttachmentPreviewEntry
 import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
+import com.codingskillshub.bitpigeon.ui.composables.PreviewSize
 import com.codingskillshub.bitpigeon.ui.composables.UserEntry
 import com.codingskillshub.bitpigeon.ui.composables.ViewType
 import com.codingskillshub.bitpigeon.ui.viewmodels.AttachmentViewModel
@@ -65,6 +66,15 @@ fun ChatGroupDetailView(
         files = files,
         onBackClick = {
             navController.popBackStack()
+        },
+        onMediaClick = { attachment ->
+            val isImage = attachment.fileType.startsWith("image/", ignoreCase = true)
+            val isVideo = attachment.fileType.startsWith("video/", ignoreCase = true)
+            if (isImage || isVideo) {
+                navController.navigate("media_view/${chatGroup?.group?.id}?mediaId=${attachment.id}")
+            } else {
+                chatViewModel.openAttachmentWithExternalApp(attachment)
+            }
         }
     )
 }
@@ -77,7 +87,8 @@ fun ChatGroupDetailViewContent(
     photos: List<AttachmentPreviewData>,
     videos: List<AttachmentPreviewData>,
     files: List<AttachmentPreviewData>,
-    onBackClick: () -> Unit = {}
+    onBackClick: () -> Unit = {},
+    onMediaClick: (AttachmentPreviewData) -> Unit = {}
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val coroutineScope = rememberCoroutineScope()
@@ -247,9 +258,9 @@ fun ChatGroupDetailViewContent(
                 verticalAlignment = Alignment.Top
             ) { pageIndex ->
                 when (pageIndex) {
-                    0 -> PhotosGrid(photos)
-                    1 -> VideosGrid(videos)
-                    2 -> FilesList(files)
+                    0 -> PhotosGrid(photos, onMediaClick)
+                    1 -> VideosGrid(videos, onMediaClick)
+                    2 -> FilesList(files, onMediaClick)
                 }
             }
         }
@@ -257,16 +268,19 @@ fun ChatGroupDetailViewContent(
 }
 
 @Composable
-private fun PhotosGrid(photos: List<AttachmentPreviewData>) {
+private fun PhotosGrid(
+    photos: List<AttachmentPreviewData>,
+    onMediaClick: (AttachmentPreviewData) -> Unit = {}
+) {
     if (photos.isEmpty()) {
         EmptyState("No photos shared")
     } else {
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            contentPadding = PaddingValues(1.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             items(photos) { photo ->
                 AttachmentPreviewEntry(
@@ -274,7 +288,9 @@ private fun PhotosGrid(photos: List<AttachmentPreviewData>) {
                     fileType = photo.fileType,
                     fileUri = photo.fileUri.toString(),
                     viewType = ViewType.GRID,
-                    showFileName = false
+                    showFileName = false,
+                    previewSize = PreviewSize.MAX,
+                    onClick = {onMediaClick(photo)}
                 )
             }
         }
@@ -282,7 +298,10 @@ private fun PhotosGrid(photos: List<AttachmentPreviewData>) {
 }
 
 @Composable
-private fun VideosGrid(videos: List<AttachmentPreviewData>) {
+private fun VideosGrid(
+    videos: List<AttachmentPreviewData>,
+    onMediaClick: (AttachmentPreviewData) -> Unit = {}
+) {
     if (videos.isEmpty()) {
         EmptyState("No videos shared")
     } else {
@@ -299,7 +318,9 @@ private fun VideosGrid(videos: List<AttachmentPreviewData>) {
                     fileType = video.fileType,
                     fileUri = video.fileUri.toString(),
                     viewType = ViewType.GRID,
-                    showFileName = false
+                    showFileName = false,
+                    previewSize = PreviewSize.MAX,
+                    onClick = {onMediaClick(video)}
                 )
             }
         }
@@ -307,7 +328,10 @@ private fun VideosGrid(videos: List<AttachmentPreviewData>) {
 }
 
 @Composable
-private fun FilesList(files: List<AttachmentPreviewData>) {
+private fun FilesList(
+    files: List<AttachmentPreviewData>,
+    onMediaClick: (AttachmentPreviewData) -> Unit = {}
+) {
     if (files.isEmpty()) {
         EmptyState("No files shared")
     } else {
@@ -322,7 +346,8 @@ private fun FilesList(files: List<AttachmentPreviewData>) {
                     fileType = file.fileType,
                     fileUri = file.fileUri.toString(),
                     viewType = ViewType.LIST,
-                    showFileName = true
+                    showFileName = true,
+                    onClick = {onMediaClick(file)}
                 )
             }
         }

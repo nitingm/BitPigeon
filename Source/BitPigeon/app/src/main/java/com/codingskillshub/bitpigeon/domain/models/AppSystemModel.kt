@@ -26,6 +26,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.codingskillshub.bitpigeon.common.HashService
@@ -309,5 +310,22 @@ class AppSystemModel @Inject constructor(
 
         Log.i("AppSystemModel", "Requested for Profile picture: $profilePicture from $userId")
         onlineChatService.sendGetProfilePictureRequest(appFileRequest)
+    }
+
+    fun getAppVersion(): String {
+        val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+        } else {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }
+        return packageInfo.versionName?: "0.0"
+    }
+
+    suspend fun changeAppTheme(theme: String) {
+        configurationService.changeAppTheme(theme)
+    }
+
+    fun getAppTheme(): Flow<String?> {
+        return configurationService.appThemeFlow
     }
 }

@@ -20,6 +20,10 @@ import androidx.navigation.navArgument
 
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.ui.settingpages.AboutView
+import com.codingskillshub.bitpigeon.ui.settingpages.AppearanceView
+import com.codingskillshub.bitpigeon.ui.settingpages.LanguagesView
+import com.codingskillshub.bitpigeon.ui.theme.AppTheme
 import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.AttachmentViewModel
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
@@ -94,34 +98,60 @@ class MainActivity : ComponentActivity() {
             val profileViewModel: ProfileViewModel = hiltViewModel()
             val chatGroupListViewModel: ChatGroupListViewModel = hiltViewModel()
 
-            NavHost(navController = navController, startDestination = "main") {
-                composable("main") {
-                    MainView(navController, systemViewModel)
-                }
-                composable("search_group") {
-                    SearchChatGroupView(navController, chatGroupListViewModel)
-                }
-                navigation(startDestination = "chatview", route = "chat") {
-                    composable("chatview/{chatId}",
-                        arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+            AppTheme(viewModel = systemViewModel) {
+                NavHost(navController = navController, startDestination = "main") {
+                    composable("main") {
+                        MainView(navController, systemViewModel)
+                    }
+                    composable("search_group") {
+                        SearchChatGroupView(navController, chatGroupListViewModel)
+                    }
+                    navigation(startDestination = "chatview", route = "chat") {
+                        composable(
+                            "chatview/{chatId}",
+                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
                         ) { backStackEntry ->
-                        val chatViewModel: ChatViewModel = hiltViewModel()
+                            val chatViewModel: ChatViewModel = hiltViewModel()
 
-                        ChatView(navController,  systemViewModel, chatViewModel)
+                            ChatView(navController, systemViewModel, chatViewModel)
+                        }
+                        composable(
+                            "chat_group_detail/{chatId}",
+                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val attachmentViewModel: AttachmentViewModel = hiltViewModel()
+                            val chatViewModel: ChatViewModel = hiltViewModel()
+                            ChatGroupDetailView(navController, attachmentViewModel, chatViewModel)
+                        }
+                        composable(
+                            "media_view/{chatId}?mediaId={mediaId}",
+                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val mediaId = backStackEntry.arguments?.getString("mediaId")
+                            val attachmentViewModel: AttachmentViewModel = hiltViewModel()
+                            MediaView(mediaId ?: "", navController, attachmentViewModel)
+                        }
                     }
-                    composable("chat_group_detail/{chatId}",
-                        arguments = listOf(navArgument("chatId") { type = NavType.StringType})
-                    ) {  backStackEntry ->
-                        val attachmentViewModel: AttachmentViewModel = hiltViewModel()
-                        val chatViewModel: ChatViewModel = hiltViewModel()
-                        ChatGroupDetailView(navController, attachmentViewModel, chatViewModel)
+                    navigation(startDestination = "settings", route = "setting_pages") {
+                        composable("settings") {
+                            SettingsView(navController, systemViewModel)
+                        }
+                        composable("about") {
+                            AboutView(navController, systemViewModel)
+                        }
+                        composable("languages") {
+                            LanguagesView(navController)
+                        }
+                        composable("appearance") {
+                            AppearanceView(navController, systemViewModel)
+                        }
                     }
-                }
-                composable("profile_edit") {
-                    ProfileEditView(onNavigateBack = { navController.popBackStack() }, profileViewModel)
-                }
-                composable("settings") {
-                    SettingsView(navController, systemViewModel)
+                    composable("profile_edit") {
+                        ProfileEditView(
+                            onNavigateBack = { navController.popBackStack() },
+                            profileViewModel
+                        )
+                    }
                 }
             }
         }

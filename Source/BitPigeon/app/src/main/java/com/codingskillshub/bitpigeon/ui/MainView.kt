@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -78,7 +79,16 @@ fun MainViewContent(
                 },
                 subtitle = if (pagerState.currentPage == 0 && isWifiEnabled) "Wi-Fi Direct Messaging" else null,
                 showNavigationIcon = false, // No back button on main screen
-                showOptionsIcon = true
+                showOptionsIcon = true,
+                optionsMenu = { onDismiss ->
+                    DropdownMenuItem(
+                        text = { Text("Settings") },
+                        onClick = {
+                            onDismiss()
+                            navController.navigate("settings")
+                        }
+                    )
+                }
             )
         },
         bottomBar = {

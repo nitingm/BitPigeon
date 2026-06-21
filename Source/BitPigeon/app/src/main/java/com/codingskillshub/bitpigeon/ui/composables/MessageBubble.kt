@@ -45,6 +45,7 @@ fun MessageBubble(
     showDate: Boolean = false,
     date: String = "",
     imageThumbnails: List<AttachmentPreviewData> = emptyList(),
+    onMediaClick: (AttachmentPreviewData) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // State to track which attachment is being viewed in the overlay
@@ -143,7 +144,7 @@ fun MessageBubble(
                                 isTransferring = attachmentData.isTransferring,
                                 progress = attachmentData.progress,
                                 onClick = {
-                                    selectedAttachment = attachmentData
+                                    onMediaClick(attachmentData)
                                 }
                             )
                         }

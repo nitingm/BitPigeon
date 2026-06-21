@@ -137,20 +137,33 @@ fun DiscoverViewContent(
                     }
                 }
 
-                // 'items' handles the recycling and lazy loading automatically
-                items(
-                    items = usersList,
-                    // Providing a 'key' helps Compose optimize list updates/reordering
-                    key = { (_, device) -> device.deviceAddress }
-                ) { (user, device) ->
-                    DiscoveredPeerEntry(
-                        name = user.name,
-                        statusString = "${user.email} (${device.deviceName})",
-                        onClick = { onConnectToPeer(device) }
-                    )
+                if (availablePeerClients.isEmpty() && usersList.isEmpty()) {
+                    item {
+                        EmptyState("No devices found???")
+                    }
+                } else {
+                    // 'items' handles the recycling and lazy loading automatically
+                    items(
+                        items = usersList,
+                        // Providing a 'key' helps Compose optimize list updates/reordering
+                        key = { (_, device) -> device.deviceAddress }
+                    ) { (user, device) ->
+                        DiscoveredPeerEntry(
+                            name = user.name,
+                            statusString = "${user.email} (${device.deviceName})",
+                            onClick = { onConnectToPeer(device) }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyState(message: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(text = message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -168,4 +181,10 @@ fun DiscoverViewPreview() {
     )
 
     DiscoverViewContent(true, sampleUsers)
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DiscoverViewEmptyStatePreview() {
+    DiscoverViewContent(false, emptyList())
 }

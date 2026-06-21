@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -44,6 +44,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.compose.material3)
     val room_version = "2.6.1"
 
     implementation(libs.androidx.core.ktx)
@@ -83,9 +84,15 @@ dependencies {
     // Coil for image loading
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
+    implementation(libs.coil.video)
 
-    // Image processing and graphics
+    // Image processing and graphics and media
     implementation("androidx.graphics:graphics-core:1.0.0-alpha03")
     implementation("androidx.compose.foundation:foundation:1.8.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
+
+    // Media3 ExoPlayer
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.common)
 }

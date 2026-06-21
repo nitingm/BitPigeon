@@ -30,4 +30,7 @@ class AttachmentViewModel @Inject constructor(
     val filesInChatGroup = attachmentModel.getFileAttachmentPreviewDataForInChatGroup(chatId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val allMedia = attachmentModel.getAllMediaAttachmentPreviewData()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
 }

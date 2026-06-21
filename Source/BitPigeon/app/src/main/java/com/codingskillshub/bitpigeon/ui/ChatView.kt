@@ -74,6 +74,15 @@ fun ChatView(
         },
         onTitleClick = {
             navController.navigate("chat_group_detail/${chatGroup?.group?.id}")
+        },
+        onMediaClick = { attachment ->
+            val isImage = attachment.fileType.startsWith("image/")
+            val isVideo = attachment.fileType.startsWith("video/")
+            if (isImage || isVideo) {
+                navController.navigate("media_view/${chatGroup?.group?.id}?mediaId=${attachment.id}")
+            } else {
+                chatViewModel.openAttachmentWithExternalApp(attachment)
+            }
         }
     )
 
@@ -89,7 +98,8 @@ fun ChatViewContent(
     onSendMessage: (String) -> Unit,
     onAttachClick: () -> Unit,
     onBackClick: () -> Unit,
-    onTitleClick: () -> Unit
+    onTitleClick: () -> Unit,
+    onMediaClick: (AttachmentPreviewData) -> Unit,
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
@@ -154,7 +164,11 @@ fun ChatViewContent(
                     showHeader = !message.isSentByMe,
                     showDate = !message.date.isEmpty(),
                     date = message.date,
-                    imageThumbnails = message.attachmentPreviewData
+                    imageThumbnails = message.attachmentPreviewData,
+                    onMediaClick = { attachment ->
+                        // Handle media click, e.g., navigate to MediaView
+                        onMediaClick(attachment)
+                    }
                 )
             }
         }
@@ -245,6 +259,7 @@ fun ChatViewPreview() {
         true,
         messages = dummyMessages,
         dummyAttachmentPreviewData,
+        {},
         {},
         {},
         {},

@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import androidx.core.net.toUri
+import com.codingskillshub.bitpigeon.domain.services.IntentService
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
@@ -45,6 +47,7 @@ class ChatViewModel @Inject constructor(
     val configurationService: ConfigurationService,
     val fileStorageService: FileStorageService,
     val fileTransferService: FileTransferService,
+    val intentService: IntentService,
     private val dateTimeUtil: DateTimeUtil,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -74,8 +77,7 @@ class ChatViewModel @Inject constructor(
             val attachmentPreviews = dbAttachments
                 .filter { it.messageId == message.id }
                 .mapNotNull { attachment ->
-                    val uri = Uri.parse(attachment.filePath)
-                    Log.d("ChatViewModel","uri: ${attachment.filePath}, attachment: ${attachment}")
+                    val uri = attachment.filePath.toUri()
                     // Check if there is an active transfer happening right now
                     val activeTransfer = transfers.find { it.first == attachment.id }
 
@@ -211,5 +213,13 @@ class ChatViewModel @Inject constructor(
         } catch (e: Exception) {
             timestamp
         }
+    }
+
+    fun openAttachmentWithExternalApp(attachment: AttachmentPreviewData) {
+        intentService.openFileWithExternalApp(
+            fileName = attachment.fileName,
+            fileType = attachment.fileType,
+            fileUri = attachment.fileUri.toString()
+        )
     }
 }

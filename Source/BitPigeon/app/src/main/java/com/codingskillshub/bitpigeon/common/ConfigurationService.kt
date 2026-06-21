@@ -23,6 +23,7 @@ class ConfigurationService @Inject constructor(
     private val EMAIL_ADDRESS = stringPreferencesKey("email_address")
     private val STATUS_LABEL = stringPreferencesKey("status")
     private val USER_ID_KEY = stringPreferencesKey("permanent_user_id")
+    private val APP_THEME = stringPreferencesKey("app_theme")
 
     // Signal/Flow for UI to observe
     val userNameFlow: Flow<String> = context.dataStore.data
@@ -39,6 +40,9 @@ class ConfigurationService @Inject constructor(
 
     val userIdFlow: Flow<String?> = context.dataStore.data
         .map { preferences -> preferences[USER_ID_KEY] }
+
+    val appThemeFlow: Flow<String?> = context.dataStore.data
+        .map { preferences -> preferences[APP_THEME] }
 
     suspend fun updateUserName(name: String) {
         context.dataStore.edit { preferences ->
@@ -61,6 +65,12 @@ class ConfigurationService @Inject constructor(
     suspend fun updateStatus(status: String) {
         context.dataStore.edit { preferences ->
             preferences[STATUS_LABEL] = status
+        }
+    }
+
+    suspend fun changeAppTheme(theme: String) {
+        context.dataStore.edit { preferences ->
+            preferences[APP_THEME] = theme
         }
     }
 
