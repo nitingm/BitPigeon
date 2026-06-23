@@ -10,28 +10,27 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import com.codingskillshub.bitpigeon.ui.viewmodels.AppSystemViewModel
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
+    primary = DarkPrimary,
     secondary = PurpleGrey80,
     tertiary = Pink80,
-    primaryContainer = PrimaryBlue,
+    primaryContainer = DarkPrimaryContainer,
     onPrimaryContainer = Color.White,
-    background = Color(0xFF1C1B1F),
-    surface = Color(0xFF1C1B1F),
+    background = DarkBackground,
+    surface = DarkSurface,
+    surfaceVariant = DarkSurfaceVariant,
     onPrimary = Color.Black,
     onSecondary = Color.Black,
     onTertiary = Color.Black,
     onBackground = Color(0xFFE6E1E5),
     onSurface = Color(0xFFE6E1E5),
+    onSurfaceVariant = DarkOnSurfaceVariant
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -51,19 +50,19 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun AppTheme(
-    viewModel: AppSystemViewModel,
+    selectedTheme: String,
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val themeState by viewModel.appTheme.collectAsState()
-
-    val useDarkTheme = when (themeState.first) {
+    val useDarkTheme = when (selectedTheme) {
         "LIGHT" -> false
         "DARK" -> true
         else -> isSystemInDarkTheme()
     }
 
     val colorScheme = when {
+        // Use custom DarkColorScheme if DARK is explicitly selected for a "completely dark" experience
+        selectedTheme == "DARK" -> DarkColorScheme
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

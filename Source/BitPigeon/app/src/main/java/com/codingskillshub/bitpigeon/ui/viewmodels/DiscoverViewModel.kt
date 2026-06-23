@@ -28,6 +28,7 @@ class DiscoverViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    val isWifiEnabled: StateFlow<Boolean> = wifiService.isWifiEnabled
 
     val isWifiDirectServiceAdvertisingEnabled: StateFlow<Boolean> = wifiService.isWifiDirectServiceAdvertisingEnabled
 

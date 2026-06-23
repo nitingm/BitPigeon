@@ -2,6 +2,7 @@ package com.codingskillshub.bitpigeon.common
 
 import android.content.Context
 import android.util.Log
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -24,6 +25,8 @@ class ConfigurationService @Inject constructor(
     private val STATUS_LABEL = stringPreferencesKey("status")
     private val USER_ID_KEY = stringPreferencesKey("permanent_user_id")
     private val APP_THEME = stringPreferencesKey("app_theme")
+    private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+    private val PROFILE_PICTURE = stringPreferencesKey("profile_picture")
 
     // Signal/Flow for UI to observe
     val userNameFlow: Flow<String> = context.dataStore.data
@@ -43,6 +46,12 @@ class ConfigurationService @Inject constructor(
 
     val appThemeFlow: Flow<String?> = context.dataStore.data
         .map { preferences -> preferences[APP_THEME] }
+
+    val profilePicture: Flow<String?> = context.dataStore.data
+        .map { preferences -> preferences[PROFILE_PICTURE] }
+
+    val isOnboardingCompleted: Flow<Boolean> = context.dataStore.data
+        .map { it[ONBOARDING_COMPLETED] ?: false }
 
     suspend fun updateUserName(name: String) {
         context.dataStore.edit { preferences ->
@@ -71,6 +80,16 @@ class ConfigurationService @Inject constructor(
     suspend fun changeAppTheme(theme: String) {
         context.dataStore.edit { preferences ->
             preferences[APP_THEME] = theme
+        }
+    }
+
+    suspend fun saveOnboardingStatus(completed: Boolean) {
+        context.dataStore.edit { it[ONBOARDING_COMPLETED] = completed }
+    }
+
+    suspend fun updateProfilePicture(uri: String) {
+        context.dataStore.edit { preferences ->
+            preferences[PROFILE_PICTURE] = uri
         }
     }
 

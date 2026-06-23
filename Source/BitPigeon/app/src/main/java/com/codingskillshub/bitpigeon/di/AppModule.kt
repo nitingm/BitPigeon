@@ -11,6 +11,7 @@ import com.codingskillshub.bitpigeon.domain.models.AppSystemModel
 import com.codingskillshub.bitpigeon.domain.models.AttachmentModel
 import com.codingskillshub.bitpigeon.domain.models.ChatModel
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
+import com.codingskillshub.bitpigeon.domain.services.AudioService
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
@@ -49,8 +50,9 @@ object AppModule {
         attachmentModel: AttachmentModel,
         appSystemModel: AppSystemModel,
         userDao: UserDao,
+        audioService: AudioService,
         configurationService: ConfigurationService
-    ): ChatModel = ChatModel(chatDao, onlineChatService, hashService, attachmentModel,appSystemModel, userDao, configurationService)
+    ): ChatModel = ChatModel(chatDao, onlineChatService, hashService, attachmentModel,appSystemModel, userDao, audioService, configurationService)
 
     @Provides
     @Singleton

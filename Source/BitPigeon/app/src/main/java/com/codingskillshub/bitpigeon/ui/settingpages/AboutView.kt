@@ -41,7 +41,16 @@ fun AboutView(
     AboutViewContent(
         appName = "BitPigeon",
         appVersion = version,
-        onBackClick = { navController.popBackStack() }
+        onBackClick = { navController.popBackStack() },
+        onPrivacyClick = {
+            appSystemViewModel.openPrivacyPolicy()
+        },
+        onTermsClick = {
+            appSystemViewModel.openTermsAndConditions()
+        },
+        onLicenseClick = {
+            appSystemViewModel.openLicenseAndCertificates()
+        }
     )
 }
 

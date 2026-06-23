@@ -1,22 +1,34 @@
 package com.codingskillshub.bitpigeon.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.codingskillshub.bitpigeon.R
 import com.codingskillshub.bitpigeon.ui.viewmodels.ChatGroupListViewModel
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatGroupDb
@@ -24,7 +36,6 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroupType
 import com.codingskillshub.bitpigeon.ui.composables.ChatEntry
 import com.codingskillshub.bitpigeon.ui.composables.ImageViewOverlay
 import com.codingskillshub.bitpigeon.ui.composables.SearchBar
-import com.codingskillshub.bitpigeon.ui.viewmodels.ChatViewModel
 
 @Composable
 fun ChatGroupListView(
@@ -69,7 +80,7 @@ fun ChatGroupListView(
 
 @Composable
 fun ChatGroupListViewContent(
-    chatList: List<ChatGroup>,
+    chatList: List<ChatGroup>?,
     onlineChatGroups: List<String>,
     onChatClick: (ChatGroup) -> Unit,
     onProfilePictureClick: (String) -> Unit,
@@ -92,23 +103,55 @@ fun ChatGroupListViewContent(
             // Adds spacing at the top and bottom of the list
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            // 'items' handles the recycling and lazy loading automatically
-            items(
-                items = chatList,
-                // Providing a 'key' helps Compose optimize list updates/reordering
-                key = { chat -> chat.group.id }
-            ) { chat ->
-                ChatEntry(
-                    name = chat.group.name,
-                    lastMessage = chat.lastMessage,
-                    timestamp = chat.timestamp,
-                    profilePictureUri = chat.group.profilePicture,
-                    isOnline = (chat.group.id in onlineChatGroups),
-                    onClick = { onChatClick(chat) },
-                    onProfilePictureClick = { onProfilePictureClick(chat.group.profilePicture) }
-                )
+            if (chatList != null) {
+                // 'items' handles the recycling and lazy loading automatically
+                items(
+                    items = chatList,
+                    // Providing a 'key' helps Compose optimize list updates/reordering
+                    key = { chat -> chat.group.id }
+                ) { chat ->
+                    ChatEntry(
+                        name = chat.group.name,
+                        lastMessage = chat.lastMessage,
+                        timestamp = chat.timestamp,
+                        profilePictureUri = chat.group.profilePicture,
+                        isOnline = (chat.group.id in onlineChatGroups),
+                        onClick = { onChatClick(chat) },
+                        onProfilePictureClick = { onProfilePictureClick(chat.group.profilePicture) }
+                    )
+                }
+                if (chatList.isEmpty()) {
+                    item {
+                        EmptyState("Nothing here!!!\n Get started by discovering nearby devices.\nOR\nSearch for you/me to find your self private chat")
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyState(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 100.dp, bottom = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.pigeon_laptop),
+            contentDescription = null,
+            modifier = Modifier.size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
     }
 }
 
@@ -129,6 +172,20 @@ fun ChatGroupListViewPreview() {
         ChatGroupListViewContent(
             chatList = sampleChats,
             onlineChatGroups = sampleOnlineChats,
+            onChatClick = { /* Handle navigation */ },
+            onProfilePictureClick = { /* Handle profile picture click */ },
+            onSearchClick = { /* Handle search */ }
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun ChatGroupListViewEmptyStatePreview() {
+    MaterialTheme {
+        ChatGroupListViewContent(
+            chatList = emptyList(),
+            onlineChatGroups = emptyList(),
             onChatClick = { /* Handle navigation */ },
             onProfilePictureClick = { /* Handle profile picture click */ },
             onSearchClick = { /* Handle search */ }

@@ -50,4 +50,26 @@ class IntentService @Inject constructor(
             e.printStackTrace()
         }
     }
+
+    fun openUrlWithExternalApp(url: String) {
+        try {
+            // Ensure the URL has a scheme (e.g., http:// or https://)
+            val formattedUrl = if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                "https://$url"
+            } else {
+                url
+            }
+
+            val intent = Intent(Intent.ACTION_VIEW, formattedUrl.toUri()).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            // Create a chooser to allow the user to pick a suitable browser
+            val chooser = Intent.createChooser(intent, "Open with")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }

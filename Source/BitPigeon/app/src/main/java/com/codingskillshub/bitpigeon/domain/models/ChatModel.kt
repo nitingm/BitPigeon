@@ -13,6 +13,7 @@ import com.codingskillshub.bitpigeon.domain.entities.MessageData
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.ChatDao
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
+import com.codingskillshub.bitpigeon.domain.services.AudioService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,7 @@ class ChatModel @Inject constructor(
     private val attachmentModel: AttachmentModel,
     private val appSystemModel: AppSystemModel,
     private val userDao: UserDao,
+    private val audioService: AudioService,
     private val configurationService: ConfigurationService
 ) {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -100,6 +102,7 @@ class ChatModel @Inject constructor(
         }
 
         chatDao.insertMessage(message)
+        audioService.playMessageSentSound()
     }
 
     suspend fun sendMessageWithAttachment(messageText: String, chatId: String, uris: List<Uri>) {

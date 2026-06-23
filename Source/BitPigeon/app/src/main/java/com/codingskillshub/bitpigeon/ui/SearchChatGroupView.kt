@@ -33,7 +33,7 @@ fun SearchChatGroupView(
     val searchQuery by viewModel.searchQuery.collectAsState()
 
     SearchChatGroupViewContent(
-        filteredConversations,
+        filteredConversations ?: emptyList(),
 
         searchQuery = searchQuery,
         onChatClick = { chatId ->

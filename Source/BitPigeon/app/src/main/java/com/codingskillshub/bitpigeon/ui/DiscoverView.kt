@@ -1,19 +1,23 @@
 package com.codingskillshub.bitpigeon.ui
 
 import android.net.wifi.p2p.WifiP2pDevice
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -22,12 +26,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.codingskillshub.bitpigeon.R
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredGroupEntry
@@ -45,6 +52,7 @@ fun DiscoverView(
     val availablePeerClients by discoverViewModel.availableClients.collectAsState()
     val isRefreshing by discoverViewModel.isRefreshing.collectAsState()
     val isWifiDirectServiceAdvertisingEnabled by discoverViewModel.isWifiDirectServiceAdvertisingEnabled.collectAsState()
+    val isWifiEnabled by discoverViewModel.isWifiEnabled.collectAsState()
 
     discoverViewModel.onChatGroupInvoked = { groupId ->
         navController.navigate("chatview/$groupId")
@@ -55,6 +63,7 @@ fun DiscoverView(
         usersList,
         availablePeerClients,
         isRefreshing,
+        isWifiEnabled,
         onRefresh = { discoverViewModel.refresh() },
         onConnectToPeer = { peer -> discoverViewModel.connectToPeer(peer) },
         onOpenDirectChat = { user -> discoverViewModel.createAndOpenDirectChat(user) },
@@ -68,6 +77,7 @@ fun DiscoverViewContent(
     usersList: List<Pair<User, WifiP2pDevice>>,
     availablePeerClients: List<Client> = emptyList(),
     isRefreshing: Boolean = false,
+    isWifiEnabled: Boolean = true,
     onRefresh: () -> Unit = {},
     onConnectToPeer: (WifiP2pDevice) -> Unit = {},
     onOpenDirectChat: (User) -> Unit = {},
@@ -122,39 +132,47 @@ fun DiscoverViewContent(
 
                 item {
                     Box(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .background(color = MaterialTheme.colorScheme.primary)
+                            .background(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small)
                     ) {
                         Text(
                             text = "Discovered Users",
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 15.sp
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             ),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
                 }
 
-                if (availablePeerClients.isEmpty() && usersList.isEmpty()) {
-                    item {
-                        EmptyState("No devices found???")
+                if (isWifiEnabled) {
+                    if (availablePeerClients.isEmpty() && usersList.isEmpty()) {
+                        item {
+                            EmptyState("No devices found nearby.\nPull down to scan again.")
+                        }
+                    } else {
+                        // 'items' handles the recycling and lazy loading automatically
+                        items(
+                            items = usersList,
+                            // Providing a 'key' helps Compose optimize list updates/reordering
+                            key = { (_, device) -> device.deviceAddress }
+                        ) { (user, device) ->
+                            DiscoveredPeerEntry(
+                                name = user.name,
+                                statusString = "${user.email} (${device.deviceName})",
+                                onClick = { onConnectToPeer(device) }
+                            )
+                        }
                     }
                 } else {
-                    // 'items' handles the recycling and lazy loading automatically
-                    items(
-                        items = usersList,
-                        // Providing a 'key' helps Compose optimize list updates/reordering
-                        key = { (_, device) -> device.deviceAddress }
-                    ) { (user, device) ->
-                        DiscoveredPeerEntry(
-                            name = user.name,
-                            statusString = "${user.email} (${device.deviceName})",
-                            onClick = { onConnectToPeer(device) }
-                        )
+                    item {
+                        WifiDisabledState("Wi-Fi is not enabled. \n Turn wifi ON???")
                     }
                 }
+
+
             }
         }
     }
@@ -162,8 +180,51 @@ fun DiscoverViewContent(
 
 @Composable
 private fun EmptyState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 100.dp, bottom = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.pigeon_discover),
+            contentDescription = null,
+            modifier = Modifier.size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
+    }
+}
+
+@Composable
+private fun WifiDisabledState(message: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 100.dp, bottom = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.pigeon_wifi_broken),
+            contentDescription = null,
+            modifier = Modifier.size(200.dp)
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 32.dp)
+        )
     }
 }
 
@@ -187,4 +248,11 @@ fun DiscoverViewPreview() {
 @Composable
 fun DiscoverViewEmptyStatePreview() {
     DiscoverViewContent(false, emptyList())
+}
+
+
+@Preview(showBackground = true)
+@Composable
+fun DiscoverViewWifiDisabledStatePreview() {
+    DiscoverViewContent(false, isWifiEnabled = false, usersList = emptyList())
 }

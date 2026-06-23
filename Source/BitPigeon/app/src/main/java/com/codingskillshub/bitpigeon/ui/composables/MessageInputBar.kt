@@ -34,8 +34,6 @@ fun MessageInputBar(
 ) {
     var textState by remember { mutableStateOf("") }
 
-
-
     Surface(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp, // Slight shadow/elevation
@@ -60,11 +58,19 @@ fun MessageInputBar(
             TextField(
                 value = textState,
                 onValueChange = { textState = it },
-                placeholder = { Text("Type a message...") },
+                placeholder = {
+                    Text(
+                        text = "Type a message...",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    )
+                },
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 4.dp),
                 shape = RoundedCornerShape(24.dp),
+                textStyle = MaterialTheme.typography.bodyLarge,
                 colors = TextFieldDefaults.colors(
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,

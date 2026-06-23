@@ -3,6 +3,7 @@ package com.codingskillshub.bitpigeon.ui.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.codingskillshub.bitpigeon.domain.models.AppSystemModel
+import com.codingskillshub.bitpigeon.domain.services.IntentService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AppSystemViewModel @Inject constructor(
     private val appSystemModel: AppSystemModel,
-    private val wifiService: WifiCommunicationService
+    private val wifiService: WifiCommunicationService,
+    private val intentService: IntentService
 ) : ViewModel() {
     // Example global states
     val isWifiEnabled = wifiService.isWifiEnabled
@@ -45,6 +47,20 @@ class AppSystemViewModel @Inject constructor(
         "SYSTEM_DEFAULT" to "System Default"
     )
 
+    val isOnboardingCompleted: StateFlow<Boolean?> = appSystemModel.isOnboardingCompleted()
+        .map { it as Boolean? }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    fun completeOnboarding() {
+        viewModelScope.launch {
+            appSystemModel.completeOnboarding()
+        }
+    }
+
     fun getAppVersionDetail(): String {
         return "Version ${appSystemModel.getAppVersion()}"
     }
@@ -53,5 +69,20 @@ class AppSystemViewModel @Inject constructor(
         viewModelScope.launch {
             appSystemModel.changeAppTheme(theme.first)
         }
+    }
+
+    fun openPrivacyPolicy() {
+        val privacyPolicyUrl = "https://sites.google.com/view/bitpigeon/home"
+        intentService.openUrlWithExternalApp(privacyPolicyUrl)
+    }
+    
+    fun openTermsAndConditions() {
+    	val tandcUrl = "https://sites.google.com/view/bitpigeon/terms-and-conditions"
+    	intentService.openUrlWithExternalApp(tandcUrl)
+    }
+    
+    fun openLicenseAndCertificates() {
+    	val licenseUrl = "https://sites.google.com/view/bitpigeon/license-and-certificates"
+    	intentService.openUrlWithExternalApp(licenseUrl)
     }
 }

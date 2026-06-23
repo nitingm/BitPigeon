@@ -328,4 +328,12 @@ class AppSystemModel @Inject constructor(
     fun getAppTheme(): Flow<String?> {
         return configurationService.appThemeFlow
     }
+
+    fun isOnboardingCompleted(): Flow<Boolean> {
+        return configurationService.isOnboardingCompleted
+    }
+
+    suspend fun completeOnboarding() {
+        configurationService.saveOnboardingStatus(true)
+    }
 }

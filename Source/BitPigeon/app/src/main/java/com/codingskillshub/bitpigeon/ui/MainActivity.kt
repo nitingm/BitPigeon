@@ -10,6 +10,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavType
@@ -17,9 +27,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
+import com.codingskillshub.bitpigeon.domain.services.AudioService
 
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.ui.onboardingscreens.OnboardingMainView
 import com.codingskillshub.bitpigeon.ui.settingpages.AboutView
 import com.codingskillshub.bitpigeon.ui.settingpages.AppearanceView
 import com.codingskillshub.bitpigeon.ui.settingpages.LanguagesView
@@ -44,6 +56,8 @@ class MainActivity : ComponentActivity() {
     lateinit var channel: WifiP2pManager.Channel
     @Inject
     lateinit var wifiService: WifiCommunicationService
+    @Inject
+    lateinit var audioService: AudioService
 
     // Inside your Activity
     private val intentFilter = IntentFilter().apply {
@@ -98,59 +112,116 @@ class MainActivity : ComponentActivity() {
             val profileViewModel: ProfileViewModel = hiltViewModel()
             val chatGroupListViewModel: ChatGroupListViewModel = hiltViewModel()
 
-            AppTheme(viewModel = systemViewModel) {
-                NavHost(navController = navController, startDestination = "main") {
-                    composable("main") {
-                        MainView(navController, systemViewModel)
-                    }
-                    composable("search_group") {
-                        SearchChatGroupView(navController, chatGroupListViewModel)
-                    }
-                    navigation(startDestination = "chatview", route = "chat") {
-                        composable(
-                            "chatview/{chatId}",
-                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
-                        ) { backStackEntry ->
-                            val chatViewModel: ChatViewModel = hiltViewModel()
+            val isOnboardingCompleted by systemViewModel.isOnboardingCompleted.collectAsState()
+            val themeState by systemViewModel.appTheme.collectAsState()
 
-                            ChatView(navController, systemViewModel, chatViewModel)
+            AppTheme(selectedTheme = themeState.first) {
+                if (isOnboardingCompleted != null) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = if (isOnboardingCompleted == true) "main" else "onboarding"
+                    ) {
+                        composable("onboarding") {
+                            OnboardingMainView(navController, systemViewModel)
                         }
-                        composable(
-                            "chat_group_detail/{chatId}",
-                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
-                        ) { backStackEntry ->
-                            val attachmentViewModel: AttachmentViewModel = hiltViewModel()
-                            val chatViewModel: ChatViewModel = hiltViewModel()
-                            ChatGroupDetailView(navController, attachmentViewModel, chatViewModel)
+                        composable("main") {
+                            MainView(navController, systemViewModel)
                         }
-                        composable(
-                            "media_view/{chatId}?mediaId={mediaId}",
-                            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
-                        ) { backStackEntry ->
-                            val mediaId = backStackEntry.arguments?.getString("mediaId")
-                            val attachmentViewModel: AttachmentViewModel = hiltViewModel()
-                            MediaView(mediaId ?: "", navController, attachmentViewModel)
+                        composable("search_group") {
+                            SearchChatGroupView(navController, chatGroupListViewModel)
+                        }
+                        navigation(startDestination = "chatview", route = "chat") {
+                            composable(
+                                "chatview/{chatId}",
+                                arguments = listOf(navArgument("chatId") { type = NavType.StringType }),
+                                enterTransition = {
+                                    slideIntoContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                                        animationSpec = tween(500)
+                                    )
+                                },
+                                exitTransition = {
+                                    slideOutOfContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                                        animationSpec = tween(500)
+                                    )
+                                },
+                                popEnterTransition = {
+                                    EnterTransition.None
+                                },
+                                popExitTransition = {
+                                    slideOutOfContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                                        animationSpec = tween(500)
+                                    )
+                                }
+                            ) { backStackEntry ->
+                                val chatViewModel: ChatViewModel = hiltViewModel()
+
+                                ChatView(navController, systemViewModel, chatViewModel)
+                            }
+                            composable(
+                                "chat_group_detail/{chatId}",
+                                arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val attachmentViewModel: AttachmentViewModel = hiltViewModel()
+                                val chatViewModel: ChatViewModel = hiltViewModel()
+                                ChatGroupDetailView(navController, attachmentViewModel, chatViewModel)
+                            }
+                            composable(
+                                "media_view/{chatId}?mediaId={mediaId}",
+                                arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val mediaId = backStackEntry.arguments?.getString("mediaId")
+                                val attachmentViewModel: AttachmentViewModel = hiltViewModel()
+                                MediaView(mediaId ?: "", navController, attachmentViewModel)
+                            }
+                        }
+                        navigation(startDestination = "settings", route = "setting_pages") {
+                            composable("settings",
+                                enterTransition = {
+                                    slideIntoContainer(
+                                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                                        animationSpec = tween(500)
+                                    )
+                                },
+                                popEnterTransition = {
+                                    EnterTransition.None
+                                }
+                            ) {
+                                SettingsView(navController, systemViewModel)
+                            }
+                            composable("about") {
+                                AboutView(navController, systemViewModel)
+                            }
+                            composable("languages") {
+                                LanguagesView(navController)
+                            }
+                            composable("appearance") {
+                                AppearanceView(navController, systemViewModel)
+                            }
+                        }
+                        composable("profile_edit",
+                            enterTransition = {
+                                slideIntoContainer(
+                                    towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                                    animationSpec = tween(500)
+                                )
+                            }
+                        ) {
+                            ProfileEditView(
+                                onNavigateBack = { navController.popBackStack() },
+                                profileViewModel
+                            )
                         }
                     }
-                    navigation(startDestination = "settings", route = "setting_pages") {
-                        composable("settings") {
-                            SettingsView(navController, systemViewModel)
-                        }
-                        composable("about") {
-                            AboutView(navController, systemViewModel)
-                        }
-                        composable("languages") {
-                            LanguagesView(navController)
-                        }
-                        composable("appearance") {
-                            AppearanceView(navController, systemViewModel)
-                        }
-                    }
-                    composable("profile_edit") {
-                        ProfileEditView(
-                            onNavigateBack = { navController.popBackStack() },
-                            profileViewModel
-                        )
+                } else {
+                    // Show a blank surface while waiting for onboarding status to load
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize())
                     }
                 }
             }
@@ -169,4 +240,8 @@ class MainActivity : ComponentActivity() {
         unregisterReceiver(receiver)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        audioService.release()
+    }
 }

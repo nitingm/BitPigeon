@@ -40,9 +40,10 @@ class ChatGroupListViewModel @Inject constructor(
      * Raw data stream from the Model.
      * We convert the Flow from the Model into a StateFlow here so it stays active
      * while the ViewModel is alive.
+     * Initial value is null to indicate loading state.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    val conversations: StateFlow<List<ChatGroup>> = conversationModel.getAllConversations()
+    val conversations: StateFlow<List<ChatGroup>?> = conversationModel.getAllConversations()
         .flatMapLatest { list: List<ChatGroup> ->
             if (list.isEmpty()) {
                 flowOf(emptyList<ChatGroup>())
@@ -65,17 +66,19 @@ class ChatGroupListViewModel @Inject constructor(
                 }
                 combine(flows) { it.toList() }
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * A filtered stream of conversations based on the search query.
      * Includes a special case: if query is "me", "you", or "myself",
      * it filters for groups where the current user is the only member.
      */
-    val filteredConversations: StateFlow<List<ChatGroup>> = combine(
+    val filteredConversations: StateFlow<List<ChatGroup>?> = combine(
         conversations,
         _searchQuery
     ) { allConversations, query ->
+        if (allConversations == null) return@combine null
+        
         val trimmedQuery = query.trim().lowercase()
 
         if (trimmedQuery.isEmpty()) {
@@ -104,7 +107,7 @@ class ChatGroupListViewModel @Inject constructor(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
+        initialValue = null
     )
 
     fun onSearchQueryChanged(newQuery: String) {
