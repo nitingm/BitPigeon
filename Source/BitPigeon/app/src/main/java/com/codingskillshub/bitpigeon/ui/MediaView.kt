@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 import com.codingskillshub.bitpigeon.ui.composables.ViewHeader
 import com.codingskillshub.bitpigeon.ui.viewmodels.AttachmentViewModel
@@ -102,7 +103,9 @@ fun MediaViewContent(
                 ) {
                     if (media.fileType.startsWith("image")) {
                         AsyncImage(
-                            model = media.fileUri,
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(media.fileUri)
+                                .build(),
                             contentDescription = media.fileName,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit

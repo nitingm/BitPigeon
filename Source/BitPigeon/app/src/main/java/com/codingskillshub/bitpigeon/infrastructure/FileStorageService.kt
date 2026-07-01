@@ -19,7 +19,7 @@ import javax.inject.Singleton
 class FileStorageService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    fun getOutputStream(fileName: String, isPrivateStorage: Boolean): Pair<OutputStream, Uri?> {
+    fun getOutputStream(fileName: String, isPrivateStorage: Boolean): Pair<OutputStream, Uri> {
         return if (isPrivateStorage) {
             val directory = File(context.getExternalFilesDir(null), "BitPigeon")
             if (!directory.exists()) directory.mkdirs()
@@ -121,15 +121,20 @@ class FileStorageService @Inject constructor(
 
         // For content:// URIs on Android Q+ use MediaStore query to validate display name
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val cursor = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val existingFileName = it.getString(it.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME))
-                    existingFileName == fileName
-                } else {
-                    false
-                }
-            } ?: false
+            try {
+                // Instead of querying the cursor (which requires persistent permissions),
+                // we try to open the metadata descriptor or a stream.
+                context.contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                    // If we can open it, the file exists and we have access.
+                    // Note: We can't easily verify the 'fileName' matches the display name
+                    // without a Cursor, but if the URI is valid, the file is available.
+                    true
+                } ?: false
+            } catch (e: Exception) {
+                // If an exception is thrown (SecurityException or FileNotFound), the file doesn't exist or access is lost
+                Log.e("FileStorageService", "File check failed for URI: $uri", e)
+                false
+            }
         } else {
             // Legacy: try filesystem path if available
             val file = File(uri.path ?: return false)

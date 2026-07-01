@@ -103,7 +103,6 @@ class OnlineChatService @Inject constructor(
     private fun startServer() {
         if (adhocServer == null) {
             Log.d("OnlineChatService", "Starting AdhocServer on port $PORT")
-            // Ensure client is disconnected if we are becoming group owner
             adhocServer = AdhocServer()
             adhocServer?.startServer(PORT)
         }

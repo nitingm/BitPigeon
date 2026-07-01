@@ -85,6 +85,8 @@ class WifiCommunicationService @Inject constructor(
     private var isServiceAdvertising = false
     private var isServiceDiscoveryActive = false
 
+    private var localDeviceInfo: WifiP2pDevice? = null
+
     private val refreshMutex = Mutex()
 
     var onServiceAdvertisingChanged: ((Boolean) -> Unit)? = null
@@ -97,6 +99,14 @@ class WifiCommunicationService @Inject constructor(
 
     fun setUserDetails(user: User) {
         this.user = user
+    }
+
+    fun getLocalDeviceInfo(): WifiP2pDevice? {
+        return localDeviceInfo
+    }
+
+    fun getDiscoveredPeers(): List<WifiP2pDevice> {
+        return _peers.value
     }
 
     /**
@@ -210,10 +220,6 @@ class WifiCommunicationService @Inject constructor(
             _connectionInfo.value = null
             Log.d("WifiCommService", "Disconnected from P2P group")
         }
-    }
-
-    fun setDeviceName(name: String) {
-        _deviceName.value = name
     }
 
     @SuppressLint("MissingPermission")
@@ -611,9 +617,13 @@ class WifiCommunicationService @Inject constructor(
                 /* Handle connection/disconnection logic */
                 updateNetworkInfo(networkInfo)
             },
-            onDeviceChanged = {
+            onDeviceChanged = { device ->
                 /* Update local device info */
-
+                localDeviceInfo = device
+                device?.let {
+                    _deviceName.value = it.deviceName
+                    Log.d("WifiCommService", "Local device updated: ${it.deviceName} (${it.deviceAddress})")
+                }
             }
         )
     }

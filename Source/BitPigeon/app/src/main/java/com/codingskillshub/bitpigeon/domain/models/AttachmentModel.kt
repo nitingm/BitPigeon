@@ -1,6 +1,8 @@
 package com.codingskillshub.bitpigeon.domain.models
 
+import android.util.Log
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
@@ -80,6 +82,12 @@ class AttachmentModel @Inject constructor(
 
         // 1. Initial Insert (PENDING) - Done synchronously before returning to avoid race conditions
         attachmentsWithUris.forEach { (attachment, _) ->
+            try {
+                val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(attachment.filePath.toUri(), takeFlags)
+            } catch (e: SecurityException) {
+                Log.e("AttachmentModel", "SecurityException while taking persistable URI permission for ${attachment.filePath} \n ${e.message}")
+            }
             attachmentDao.insertAttachment(attachment)
         }
 

@@ -11,9 +11,11 @@ import com.codingskillshub.bitpigeon.domain.models.AppSystemModel
 import com.codingskillshub.bitpigeon.domain.models.AttachmentModel
 import com.codingskillshub.bitpigeon.domain.models.ChatModel
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
+import com.codingskillshub.bitpigeon.domain.models.DiscoveryModel
 import com.codingskillshub.bitpigeon.domain.services.AudioService
 import com.codingskillshub.bitpigeon.domain.services.FileTransferService
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
+import com.codingskillshub.bitpigeon.domain.services.QRCodeService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.infrastructure.FileStorageService
 import com.codingskillshub.bitpigeon.infrastructure.ImageCroppingService
@@ -79,4 +81,13 @@ object AppModule {
         appSystemModel: AppSystemModel,
         hashService: HashService
     ): ConversationModel = ConversationModel(chatModel, chatGroupDao, userDao, onlineChatService, configurationService, appSystemModel, hashService)
+
+    @Provides
+    fun provideDiscoveryModel(
+        userDao: UserDao,
+        qrCodeService: QRCodeService,
+        onlineChatService: OnlineChatService,
+        wifiService: WifiCommunicationService,
+        configurationService: ConfigurationService
+    ): DiscoveryModel = DiscoveryModel(userDao, qrCodeService, onlineChatService, wifiService, configurationService)
 }

@@ -1,17 +1,26 @@
 package com.codingskillshub.bitpigeon.ui.viewmodels
 
+import android.util.Log
 import android.net.wifi.p2p.WifiP2pDevice
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.models.ConversationModel
+import com.codingskillshub.bitpigeon.domain.models.DiscoveryModel
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
+import com.codingskillshub.bitpigeon.domain.services.QRCodeService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,11 +28,29 @@ import javax.inject.Inject
 class DiscoverViewModel @Inject constructor(
     private val wifiService: WifiCommunicationService,
     private val onlineChatService: OnlineChatService,
-    private val conversationModel: ConversationModel
+    private val configurationService: ConfigurationService,
+    private val conversationModel: ConversationModel,
+    private val qrCodeService: QRCodeService,
+    private val discoveryModel: DiscoveryModel
 ) : ViewModel() {
-    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = wifiService.discoveredUsers
-
+    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = discoveryModel.discoveredUsers
     val availableClients: StateFlow<List<Client>> = onlineChatService.availablePeerClients
+
+    val groupOwnerName: StateFlow<String> = combine(
+        availableClients,
+        configurationService.userNameFlow
+    ) { clients, userName ->
+        if (clients.isNotEmpty()) {
+            clients.find { it.isGroupOwner }?.user?.name ?: userName
+        } else {
+            ""
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = ""
+    )
+
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -31,6 +58,26 @@ class DiscoverViewModel @Inject constructor(
     val isWifiEnabled: StateFlow<Boolean> = wifiService.isWifiEnabled
 
     val isWifiDirectServiceAdvertisingEnabled: StateFlow<Boolean> = wifiService.isWifiDirectServiceAdvertisingEnabled
+
+    val isConnectedToGroup: StateFlow<Boolean> = wifiService.connectionInfo
+        .map { it != null }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    private val _showQrPopup = MutableStateFlow(false)
+    val showQrPopup: StateFlow<Boolean> = _showQrPopup.asStateFlow()
+
+    private val _showScanner = MutableStateFlow(false)
+    val showScanner: StateFlow<Boolean> = _showScanner.asStateFlow()
+
+    private val _qrPayloadText = MutableStateFlow("")
+    val qrPayloadText: StateFlow<String> = _qrPayloadText.asStateFlow()
+
+    private val _scanError = MutableStateFlow<String?>(null)
+    val scanError: StateFlow<String?> = _scanError.asStateFlow()
 
     private var lastRefreshTime: Long = 0
     private val refreshDebounceMs = 5000L
@@ -55,7 +102,7 @@ class DiscoverViewModel @Inject constructor(
         if (currentTime - lastRefreshTime < refreshDebounceMs) {
             return
         }
-        
+
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
@@ -68,6 +115,40 @@ class DiscoverViewModel @Inject constructor(
             }
         }
     }
+
+    fun showQrPopup() {
+        viewModelScope.launch {
+            _scanError.value = null
+            _qrPayloadText.value = discoveryModel.prepareQrPayloadText()
+            _showQrPopup.value = true
+        }
+    }
+
+    fun hideQrPopup() {
+        _showQrPopup.value = false
+    }
+
+    fun openScanner() {
+        _scanError.value = null
+        _showScanner.value = true
+    }
+
+    fun hideScanner() {
+        _showScanner.value = false
+    }
+
+    fun handleScanResult(qrText: String) {
+        viewModelScope.launch {
+            _showScanner.value = false
+            _scanError.value = null
+            val connected = discoveryModel.connectToPeerFromPayloadText(qrText)
+            if (!connected) {
+                _scanError.value = "Unable to connect with scanned QR data. Please ensure the device is nearby and try again."
+            }
+        }
+    }
+
+
 
     fun switchAdvertising(enabled: Boolean) {
         wifiService.switchWifiDirectServiceAdvertising(enabled)

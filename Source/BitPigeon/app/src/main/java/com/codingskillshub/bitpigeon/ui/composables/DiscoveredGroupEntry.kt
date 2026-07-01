@@ -30,12 +30,10 @@ import com.codingskillshub.bitpigeon.domain.entities.User
 
 @Composable
 fun DiscoveredGroupEntry(
+    groupName: String,
     clients: List<Client>,
     onClick: (User) -> Unit = {}
 ) {
-    // Extract group owner name from clients list
-    val groupOwnerName = clients.find { it.isGroupOwner }?.user?.name ?: "Unknown"
-
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -47,7 +45,7 @@ fun DiscoveredGroupEntry(
                 .padding(16.dp)
         ) {
             Text(
-                text = "${groupOwnerName}'s group",
+                text = "${groupName}'s group",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -201,6 +199,7 @@ fun DiscoveredGroupEntryPreview() {
         )
 
         DiscoveredGroupEntry(
+            groupName = "Nitin",
             clients = previewClients
         )
     }

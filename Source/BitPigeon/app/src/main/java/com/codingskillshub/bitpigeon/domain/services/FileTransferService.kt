@@ -1,8 +1,10 @@
 package com.codingskillshub.bitpigeon.domain.services
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import androidx.core.net.toUri
 import com.codingskillshub.bitpigeon.common.ConfigurationService
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import com.codingskillshub.bitpigeon.domain.entities.AppFile
@@ -69,11 +71,11 @@ class FileTransferService @Inject constructor(
             val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
             selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
 
-            serverSocketManager = ServerSocketManager(PORT).apply {
+            serverSocketManager = ServerSocketManager(PORT, "FSS").apply {
                 onClientConnected = { client -> handleClientConnection(client) }
                 onClientDisconnected = { clientId -> handleClientDisconnection(clientId) }
+                startForFileTransfer()
             }
-            serverSocketManager?.startForFileTransfer()
         }
     }
 
@@ -161,6 +163,12 @@ class FileTransferService @Inject constructor(
                     updateProgress(attachment.id, progress)
                 }
             }
+            try {
+                val takeFlags: Int = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (e: SecurityException) {
+                Log.e("FileTransferService", "SecurityException while taking persistable URI permission for ${attachment.filePath} \n ${e.message}")
+            }
             if (attachment.storeIn == StoreIn.PUBLIC_STORAGE) {
                 fileStorageService.finalizeFile(uri)
             }
@@ -176,7 +184,7 @@ class FileTransferService @Inject constructor(
     }
 
     suspend fun sendAttachmentToClient(attachment: Attachment, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
-        val clientSocketManager = ClientSocketManager()
+        val clientSocketManager = ClientSocketManager("FCS")
         try {
             attachmentDao.insertAttachment(attachment.copy(filePath = fileUri, transferStatus = TransferStatus.TRANSFERRING))
             updateProgress(attachment.id, 0)
@@ -312,7 +320,7 @@ class FileTransferService @Inject constructor(
     }
 
     suspend fun sendAppFileToClient(appFile: AppFile, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
-        val clientSocketManager = ClientSocketManager()
+        val clientSocketManager = ClientSocketManager("FCS")
         try {
             Log.d("FileTransferService","[sendAppFileToClient] Starting transfer to ${client.ipAddress}:${PORT}")
             Log.d("FileTransferService","[sendAppFileToClient] File URI: $fileUri, Size: ${appFile.fileSize} bytes")

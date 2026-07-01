@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,16 +17,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -39,7 +44,10 @@ import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredGroupEntry
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredPeerEntry
+import com.codingskillshub.bitpigeon.ui.theme.AppTheme
 import com.codingskillshub.bitpigeon.ui.viewmodels.DiscoverViewModel
+import com.codingskillshub.bitpigeon.ui.composables.QRCodePopUp
+import com.codingskillshub.bitpigeon.ui.composables.QRCodeScannerView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +61,11 @@ fun DiscoverView(
     val isRefreshing by discoverViewModel.isRefreshing.collectAsState()
     val isWifiDirectServiceAdvertisingEnabled by discoverViewModel.isWifiDirectServiceAdvertisingEnabled.collectAsState()
     val isWifiEnabled by discoverViewModel.isWifiEnabled.collectAsState()
+    val groupOwnerName by discoverViewModel.groupOwnerName.collectAsState()
+    val isConnectedToGroup by discoverViewModel.isConnectedToGroup.collectAsState()
+    val showQrPopup by discoverViewModel.showQrPopup.collectAsState()
+    val showScanner by discoverViewModel.showScanner.collectAsState()
+    val qrPayloadText by discoverViewModel.qrPayloadText.collectAsState()
 
     discoverViewModel.onChatGroupInvoked = { groupId ->
         navController.navigate("chatview/$groupId")
@@ -61,37 +74,60 @@ fun DiscoverView(
     DiscoverViewContent(
         isWifiDirectServiceAdvertisingEnabled,
         usersList,
+        groupOwnerName = groupOwnerName,
         availablePeerClients,
         isRefreshing,
         isWifiEnabled,
+        isConnectedToGroup = isConnectedToGroup,
         onRefresh = { discoverViewModel.refresh() },
         onConnectToPeer = { peer -> discoverViewModel.connectToPeer(peer) },
         onOpenDirectChat = { user -> discoverViewModel.createAndOpenDirectChat(user) },
-        onSwitchAdvertising = { enabled -> discoverViewModel.switchAdvertising(enabled)}
+        onSwitchAdvertising = { enabled -> discoverViewModel.switchAdvertising(enabled)},
+        onShowQr = { discoverViewModel.showQrPopup() },
+        onScanQr = { discoverViewModel.openScanner() }
     )
+
+    if (showQrPopup) {
+        QRCodePopUp(
+            payloadText = qrPayloadText,
+            onDismiss = { discoverViewModel.hideQrPopup() }
+        )
+    }
+
+    if (showScanner) {
+        QRCodeScannerView(
+            onScanResult = { discoverViewModel.handleScanResult(it) },
+            onCancel = { discoverViewModel.hideScanner() }
+        )
+    }
 }
 
 @Composable
 fun DiscoverViewContent(
     isWifiDirectServiceAdvertisingEnabled: Boolean = false,
     usersList: List<Pair<User, WifiP2pDevice>>,
+    groupOwnerName: String = "",
     availablePeerClients: List<Client> = emptyList(),
     isRefreshing: Boolean = false,
     isWifiEnabled: Boolean = true,
+    isConnectedToGroup: Boolean = false,
     onRefresh: () -> Unit = {},
     onConnectToPeer: (WifiP2pDevice) -> Unit = {},
     onOpenDirectChat: (User) -> Unit = {},
-    onSwitchAdvertising: (Boolean) -> Unit = {}
+    onSwitchAdvertising: (Boolean) -> Unit = {},
+    onShowQr: () -> Unit = {},
+    onScanQr: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp, 8.dp)
+                .padding(16.dp, 0.dp)
         ) {
             Row(
                 modifier = Modifier.align(Alignment.Center)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                Text(
@@ -103,9 +139,16 @@ fun DiscoverViewContent(
                    modifier = Modifier
                        .weight(1f)
                )
+                VerticalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
+                )
                 Switch(
                     checked = isWifiDirectServiceAdvertisingEnabled,
-                    onCheckedChange = { onSwitchAdvertising(!isWifiDirectServiceAdvertisingEnabled) }
+                    onCheckedChange = { onSwitchAdvertising(!isWifiDirectServiceAdvertisingEnabled) },
+                    modifier = Modifier
+                        .scale(0.8f)
                 )
             }
         }
@@ -116,12 +159,12 @@ fun DiscoverViewContent(
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                // Adds spacing at the top and bottom of the list
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 if (availablePeerClients.isNotEmpty()) {
                     item {
                         DiscoveredGroupEntry(
+                            groupName = groupOwnerName,
                             availablePeerClients,
                             onClick = { user ->
                                 onOpenDirectChat(user)
@@ -133,7 +176,7 @@ fun DiscoverViewContent(
                 item {
                     Box(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .padding(horizontal = 12.dp, vertical = 0.dp)
                             .background(color = MaterialTheme.colorScheme.primaryContainer, shape = MaterialTheme.shapes.small)
                     ) {
                         Text(
@@ -145,6 +188,7 @@ fun DiscoverViewContent(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 if (isWifiEnabled) {
@@ -173,6 +217,27 @@ fun DiscoverViewContent(
                 }
 
 
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onShowQr,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(text = "Show QR")
+            }
+            Button(
+                onClick = onScanQr,
+                modifier = Modifier.weight(1f),
+                enabled = !isConnectedToGroup
+            ) {
+                Text(text = "Scan QR")
             }
         }
     }
@@ -241,7 +306,7 @@ fun DiscoverViewPreview() {
         Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
     )
 
-    DiscoverViewContent(true, sampleUsers)
+    DiscoverViewContent(true, sampleUsers, isConnectedToGroup = false)
 }
 
 @Preview(showBackground = true)
@@ -255,4 +320,20 @@ fun DiscoverViewEmptyStatePreview() {
 @Composable
 fun DiscoverViewWifiDisabledStatePreview() {
     DiscoverViewContent(false, isWifiEnabled = false, usersList = emptyList())
+}
+
+@Preview(showBackground = true)
+@Composable
+fun DiscoverViewDarkPreview() {
+    // Each WifiP2pDevice needs a unique deviceAddress to avoid duplicate keys in LazyColumn
+    val sampleUsers = listOf(
+        Pair(User("1", "Aman Gupta", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:01"; deviceName = "Aman's Phone" }),
+        Pair(User("2", "John Doe", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:02"; deviceName = "John's Phone" }),
+        Pair(User("3", "Project Group", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:03"; deviceName = "Project Group" }),
+        Pair(User("4", "Mama", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:04"; deviceName = "Mama's Phone" }),
+        Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
+    )
+    AppTheme("DARK") {
+        DiscoverViewContent(true, sampleUsers)
+    }
 }

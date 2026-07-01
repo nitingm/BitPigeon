@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.NetworkInfo
+import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
 import android.util.Log
 
@@ -15,7 +16,7 @@ class WifiDirectBroadcastReceiver(
     private val onStateChanged: (Boolean) -> Unit,
     private val onPeersChanged: () -> Unit,
     private val onConnectionChanged: (NetworkInfo?) -> Unit,
-    private val onDeviceChanged: () -> Unit
+    private val onDeviceChanged: (WifiP2pDevice) -> Unit
 ) : BroadcastReceiver() {
 
     @SuppressLint("MissingPermission")
@@ -46,7 +47,10 @@ class WifiDirectBroadcastReceiver(
             // 4. This device's configuration details have changed
             WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION -> {
                 Log.d("WifiDirectBR", "This device changed")
-                onDeviceChanged()
+                val device = intent.getParcelableExtra<WifiP2pDevice>(WifiP2pManager.EXTRA_WIFI_P2P_DEVICE)
+                device?.let{
+                    onDeviceChanged(device)
+                }
             }
 
             WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {

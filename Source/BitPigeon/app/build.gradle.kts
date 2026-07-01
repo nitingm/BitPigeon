@@ -66,6 +66,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.zxing:core:3.5.0")
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

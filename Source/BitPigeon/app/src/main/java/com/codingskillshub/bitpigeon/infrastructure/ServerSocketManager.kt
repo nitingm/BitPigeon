@@ -14,7 +14,13 @@ import java.io.EOFException
 import java.io.IOException
 import java.util.Collections
 
-class ServerSocketManager(private val port: Int) {
+// Socket type
+// CSS - Chat Server Socket
+// FSS - File Server Socket
+class ServerSocketManager(
+    private val port: Int,
+    private val socketType: String = "CSS"
+) {
     private var serverSocket: ServerSocket? = null
     private val serverScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -31,10 +37,20 @@ class ServerSocketManager(private val port: Int) {
 
     fun start() {
         serverScope.launch {
+            if (socketType == "CSS") {
+                startForChatMessaging()
+            } else if (socketType == "FSS") {
+                startForFileTransfer()
+            }
+        }
+    }
+
+    fun startForChatMessaging() {
+        serverScope.launch {
             try {
                 val ss = ServerSocket(port)
                 serverSocket = ss
-                Log.d("ServerSocketManager", "ServerSocket created on port $port")
+                Log.d("ServerSocketManager", "$socketType:: ServerSocket created on port $port")
 
                 while (!ss.isClosed) {
                     try {
@@ -43,7 +59,7 @@ class ServerSocketManager(private val port: Int) {
                         val out = ObjectOutputStream(socket.getOutputStream())
                         val input = ObjectInputStream(socket.getInputStream())
 
-                        Log.d("ServerSocketManager", "Client connected: ${socket.inetAddress.hostAddress}")
+                        Log.d("ServerSocketManager", "$socketType:: Client connected: ${socket.inetAddress.hostAddress}")
 
                         // Read user info as first object
                         val user = input.readObject()
@@ -59,26 +75,26 @@ class ServerSocketManager(private val port: Int) {
                                             val obj = input.readObject() ?: break
                                             onReceiveMessage(obj, user.id)
                                         } catch (e: EOFException) {
-                                            Log.d("ServerSocketManager", "Client ${user.id} disconnected gracefully.")
+                                            Log.d("ServerSocketManager", "$socketType:: Client ${user.id} disconnected gracefully.")
                                             break
                                         } catch (e: IOException) {
-                                            Log.e("ServerSocketManager", "Client ${user.id} connection lost: ${e.message}")
+                                            Log.e("ServerSocketManager", "$socketType:: Client ${user.id} connection lost: ${e.message}")
                                             break
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    Log.e("ServerSocketManager", "Client ${user.id} unexpected error: ${e.message}")
+                                    Log.e("ServerSocketManager", "$socketType:: Client ${user.id} unexpected error: ${e.message}")
                                 } finally {
                                     removeClient(user.id)
                                 }
                             }
                         }
                     } catch (e: Exception) {
-                        if (!ss.isClosed) Log.e("ServerSocketManager", "Accept error: ${e.message}")
+                        if (!ss.isClosed) Log.e("ServerSocketManager", "$socketType:: Accept error: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ServerSocketManager", "Server error: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Server error: ${e.message}")
             }
         }
     }
@@ -88,7 +104,7 @@ class ServerSocketManager(private val port: Int) {
             try {
                 val ss = ServerSocket(port)
                 serverSocket = ss
-                Log.d("ServerSocketManager", "ServerSocket created on port $port")
+                Log.d("ServerSocketManager", "$socketType:: ServerSocket created on port $port")
 
                 while (!ss.isClosed) {
                     try {
@@ -97,7 +113,7 @@ class ServerSocketManager(private val port: Int) {
                         val out = ObjectOutputStream(socket.getOutputStream())
                         val input = ObjectInputStream(socket.getInputStream())
 
-                        Log.d("ServerSocketManager", "Client connected: ${socket.inetAddress.hostAddress}")
+                        Log.d("ServerSocketManager", "$socketType:: Client connected: ${socket.inetAddress.hostAddress}")
 
                         // Read user info as first object
                         val user = input.readObject()
@@ -106,11 +122,11 @@ class ServerSocketManager(private val port: Int) {
                             onClientConnected?.invoke(Client(user.name, socket.inetAddress.hostAddress ?: "", socket.inetAddress.hostAddress == "192.168.49.1",user))
                         }
                     } catch (e: Exception) {
-                        if (!ss.isClosed) Log.e("ServerSocketManager", "Accept error: ${e.message}")
+                        if (!ss.isClosed) Log.e("ServerSocketManager", "$socketType:: Accept error: ${e.message}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ServerSocketManager", "Server error: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Server error: ${e.message}")
             }
         }
     }
@@ -118,7 +134,7 @@ class ServerSocketManager(private val port: Int) {
     private suspend fun removeClient(clientId: String) = withContext(Dispatchers.IO) {
         val client = clientsMap.remove(clientId)
         if (client != null) {
-            Log.d("ServerSocketManager", "Cleaning up client: $clientId")
+            Log.d("ServerSocketManager", "$socketType:: Cleaning up client: $clientId")
             try { client.inputStream.close() } catch (_: Exception) {}
             try { client.outputStream.close() } catch (_: Exception) {}
             try { client.socket.close() } catch (_: Exception) {}
@@ -133,11 +149,11 @@ class ServerSocketManager(private val port: Int) {
                 client.outputStream.writeObject(message)
                 client.outputStream.flush()
             } catch (e: Exception) {
-                Log.e("ServerSocketManager", "Send error to client $clientId: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Send error to client $clientId: ${e.message}")
                 removeClient(clientId)
             }
         } else {
-            Log.e("ServerSocketManager", "Client $clientId not found for sending message")
+            Log.e("ServerSocketManager", "$socketType:: Client $clientId not found for sending message")
         }
     }
 
@@ -148,11 +164,11 @@ class ServerSocketManager(private val port: Int) {
             try {
                 bytesRead = client.inputStream.read(buffer, 0, toRead)
             } catch (e: IOException) {
-                Log.e("ServerSocketManager", "Byte read error from $clientId: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Byte read error from $clientId: ${e.message}")
                 removeClient(clientId)
             }
         } else {
-            Log.e("ServerSocketManager", "Client $clientId not found for reading bytes")
+            Log.e("ServerSocketManager", "$socketType:: Client $clientId not found for reading bytes")
         }
         return@withContext bytesRead
     }
@@ -165,27 +181,27 @@ class ServerSocketManager(private val port: Int) {
                 val obj = client.inputStream.readObject()
                 message = obj as ActionMessage
             } catch (e: EOFException) {
-                Log.d("ServerSocketManager", "Client ${clientId} disconnected gracefully.")
+                Log.d("ServerSocketManager", "$socketType:: Client ${clientId} disconnected gracefully.")
                 removeClient(clientId)
             } catch (e: IOException) {
-                Log.e("ServerSocketManager", "Client ${clientId} connection lost: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Client ${clientId} connection lost: ${e.message}")
                 removeClient(clientId)
             } catch (e: Exception) {
-                Log.e("ServerSocketManager", "Client ${clientId} unexpected error: ${e.message}")
+                Log.e("ServerSocketManager", "$socketType:: Client ${clientId} unexpected error: ${e.message}")
                 removeClient(clientId)
             }
         } else {
-            Log.e("ServerSocketManager", "Client $clientId not found for reading bytes")
+            Log.e("ServerSocketManager", "$socketType:: Client $clientId not found for reading bytes")
         }
         return message
     }
 
     fun onReceiveMessage(message: Any, clientId: String) {
-        Log.d("ServerSocketManager", "Received message: $message")
+        Log.d("ServerSocketManager", "$socketType:: Received message: $message")
         if (message is ActionMessage) {
             onMessageReceived?.invoke(message, clientId)
         } else {
-            Log.e("ServerSocketManager", "Received invalid message: $message")
+            Log.e("ServerSocketManager", "$socketType:: Received invalid message: $message")
         }
     }
 
@@ -195,7 +211,7 @@ class ServerSocketManager(private val port: Int) {
             snapshot.forEach { id -> removeClient(id) }
             try { serverSocket?.close() } catch (_: Exception) {}
             serverScope.cancel()
-            Log.d("ServerSocketManager", "Server stopped")
+            Log.d("ServerSocketManager", "$socketType:: Server stopped")
         }
     }
 }
