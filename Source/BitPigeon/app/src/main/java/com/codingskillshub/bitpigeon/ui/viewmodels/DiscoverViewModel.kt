@@ -12,6 +12,7 @@ import com.codingskillshub.bitpigeon.domain.models.DiscoveryModel
 import com.codingskillshub.bitpigeon.domain.services.OnlineChatService
 import com.codingskillshub.bitpigeon.domain.services.QRCodeService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,10 +31,9 @@ class DiscoverViewModel @Inject constructor(
     private val onlineChatService: OnlineChatService,
     private val configurationService: ConfigurationService,
     private val conversationModel: ConversationModel,
-    private val qrCodeService: QRCodeService,
     private val discoveryModel: DiscoveryModel
 ) : ViewModel() {
-    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = discoveryModel.discoveredUsers
+    val nearbyPeers: StateFlow<List<WifiDirectPeer>> = discoveryModel.nearbyPeers
     val availableClients: StateFlow<List<Client>> = onlineChatService.availablePeerClients
 
     val groupOwnerName: StateFlow<String> = combine(
@@ -49,6 +49,17 @@ class DiscoverViewModel @Inject constructor(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ""
+    )
+
+    val isGroupOwner: StateFlow<Boolean> = combine(
+        availableClients,
+        configurationService.userIdFlow
+    ) { clients, userId ->
+        clients.any { it.user.id == userId && it.isGroupOwner }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
     )
 
 
@@ -84,9 +95,9 @@ class DiscoverViewModel @Inject constructor(
 
     var onChatGroupInvoked: ((String) -> Unit)? = null
 
-    fun connectToPeer(peer: WifiP2pDevice) {
+    fun connectToPeer(peer: WifiDirectPeer) {
         viewModelScope.launch {
-            wifiService.connectToPeer(peer)
+            discoveryModel.connectToNearbyPeer(peer)
         }
     }
 
@@ -148,7 +159,14 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
-
+    fun exitGroup() {
+        if (isGroupOwner.value) {
+            onlineChatService.destroyGroup()
+        } else {
+            onlineChatService.disconnectFromGroup()
+        }
+        discoveryModel.exitGroup()
+    }
 
     fun switchAdvertising(enabled: Boolean) {
         wifiService.switchWifiDirectServiceAdvertising(enabled)

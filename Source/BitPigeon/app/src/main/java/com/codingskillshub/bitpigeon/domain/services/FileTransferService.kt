@@ -183,15 +183,26 @@ class FileTransferService @Inject constructor(
         }
     }
 
-    suspend fun sendAttachmentToClient(attachment: Attachment, fileUri: String, client: Client) = withContext(Dispatchers.IO) {
+    suspend fun sendAttachmentsToClient(attachmentsWithUris: List<Pair<Attachment, Uri>>, client: Client) {
         val clientSocketManager = ClientSocketManager("FCS")
+        try {
+            Log.d("FileTransferService","[sendAttachmentsToClient] Connecting to FileTransfer Server at ${client.ipAddress}:${PORT}")
+            clientSocketManager.connect(client.ipAddress, PORT)
+            selfUser?.let { clientSocketManager.sendMessage(it) }
+            attachmentsWithUris.forEach { (attachment, uri) ->
+                sendAttachmentToClient(attachment, uri.toString(), clientSocketManager)
+            }
+        } catch (e: Exception) {
+            Log.e("FileTransferService","[sendAttachmentsToClient] ✗ Error sending attachments: ${e.message}", e)
+        } finally {
+            clientSocketManager.disconnect()
+        }
+    }
+
+    private suspend fun sendAttachmentToClient(attachment: Attachment, fileUri: String, clientSocketManager: ClientSocketManager) = withContext(Dispatchers.IO) {
         try {
             attachmentDao.insertAttachment(attachment.copy(filePath = fileUri, transferStatus = TransferStatus.TRANSFERRING))
             updateProgress(attachment.id, 0)
-            Log.d("FileTransferService","[sendAttachmentToClient] Connecting to FileTransfer Server at ${client.ipAddress}:${PORT}")
-            clientSocketManager.connect(client.ipAddress, PORT)
-
-            selfUser?.let { clientSocketManager.sendMessage(it) }
 
             val actionMessage = ActionMessage("SEND_ATTACHMENT", attachment)
             clientSocketManager.sendMessage(actionMessage)
@@ -222,7 +233,7 @@ class FileTransferService @Inject constructor(
             }
 
             if (totalSent == attachment.fileSize) {
-                Log.d("FileTransferService","[sendAttachmentToClient] ✓ File sent successfully to ${client.ipAddress}. Sent: $totalSent bytes")
+                Log.d("FileTransferService","[sendAttachmentToClient] ✓ File sent successfully ${attachment.fileName}. Sent: $totalSent bytes")
             } else {
                 Log.w("FileTransferService","[sendAttachmentToClient] ⚠ File size mismatch. Expected: ${attachment.fileSize}, Sent: $totalSent bytes")
             }
@@ -231,8 +242,6 @@ class FileTransferService @Inject constructor(
             Log.e("FileTransferService","[sendAttachmentToClient] ✗ Error sending file: ${e.message}", e)
             attachmentDao.updateTransferStatus(attachment.id, TransferStatus.FAILED)
         } finally {
-            Log.d("FileTransferService","[sendAttachmentToClient] Disconnecting from FileTransfer Server at ${client.ipAddress}:${PORT}")
-            clientSocketManager.disconnect()
             updateProgress(attachment.id, null)
         }
     }

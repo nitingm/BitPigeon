@@ -17,8 +17,8 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.content.ContextCompat
-import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.google.gson.Gson
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -77,9 +77,8 @@ class WifiCommunicationService @Inject constructor(
     private val _discoveredServices = MutableStateFlow<Map<String, WifiP2pDevice>>(emptyMap())
     val discoveredServices: StateFlow<Map<String, WifiP2pDevice>> = _discoveredServices.asStateFlow()
 
-    // Discovered Users with their device info
-    private val _discoveredUsers = MutableStateFlow<Map<String, Pair<User, WifiP2pDevice>>>(emptyMap())
-    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = _discoveredUsers.asStateFlow()
+    private val _discoveredPeers = MutableStateFlow<List<WifiDirectPeer>>(emptyList())
+    val discoveredPeers = _discoveredPeers.asStateFlow()
 
     private var serviceRequest: WifiP2pDnsSdServiceRequest? = null
     private var isServiceAdvertising = false
@@ -268,8 +267,6 @@ class WifiCommunicationService @Inject constructor(
         })
     }
 
-    // Service Discovery Methods
-
     /**
      * Start advertising BitPigeon service to other devices (async wrapper)
      */
@@ -434,7 +431,7 @@ class WifiCommunicationService @Inject constructor(
                     isServiceDiscoveryActive = false
                     serviceRequest = null
                     _discoveredServices.value = emptyMap()
-                    _discoveredUsers.value = emptyMap()
+                    _discoveredPeers.value = emptyList()
                     Log.d("WifiCommService", "Stop discovery successful (suspend)")
                     if (cont.isActive) cont.resume(true)
                 }
@@ -473,16 +470,13 @@ class WifiCommunicationService @Inject constructor(
                 val userId = txtRecordMap["userId"]
                 if (userId != null) {
                     try {
-                        val user = User(
-                            id = userId,
-                            name = txtRecordMap["userName"] ?: "",
-                            deviceAddress = device.deviceAddress,
-                            phoneNumber = "",
-                            email = ""
-                        )
-                        val currentUsers = _discoveredUsers.value.toMutableMap()
-                        currentUsers[device.deviceAddress] = Pair(user, device)
-                        _discoveredUsers.value = currentUsers
+                        addDiscoveredPeer(WifiDirectPeer(
+                            deviceName = device.deviceName,
+                            deviceMacAddress = device.deviceAddress,
+                            isGroupOwner = device.isGroupOwner,
+                            userId = userId,
+                            userName = txtRecordMap["userName"] ?: ""
+                        ))
                     } catch (e: Exception) {
                         Log.e("WifiCommService", "Failed to parse user info: ${e.message}")
                     }
@@ -529,7 +523,7 @@ class WifiCommunicationService @Inject constructor(
         
         // 2. Clear current lists
         _discoveredServices.value = emptyMap()
-        _discoveredUsers.value = emptyMap()
+        _discoveredPeers.value = emptyList()
 
         // 3. Sequentially restart discovery and wait for callback
         startServiceDiscoverySuspend()
@@ -540,6 +534,27 @@ class WifiCommunicationService @Inject constructor(
         }
         
         Log.d("WifiCommService", "Refresh cycle completed")
+    }
+
+    @SuppressLint("MissingPermission")
+    fun leaveGroup() {
+        if (hasWifiDirectPermissions()) {
+            manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    Log.d("WifiCommService", "Successfully left the group (group removed/left)")
+                    _connectionInfo.value = null
+                }
+
+                override fun onFailure(reason: Int) {
+                    // Reason 2 is BUSY, often happens if already disconnected or no group exists
+                    if (reason == WifiP2pManager.BUSY) {
+                        Log.d("WifiCommService", "removeGroup failed with BUSY - possibly already disconnected.")
+                    } else {
+                        Log.e("WifiCommService", "Failed to leave group: $reason")
+                    }
+                }
+            })
+        }
     }
     
     @SuppressLint("MissingPermission")
@@ -586,22 +601,21 @@ class WifiCommunicationService @Inject constructor(
     }
 
     private fun hasWifiDirectPermissions(): Boolean {
-        // Accept either FINE or COARSE as location permission for discovery on older Android
-        val hasFine = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasCoarse = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val hasLocation = hasFine || hasCoarse
-
-        val hasNearby = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // On Android 13+, NEARBY_WIFI_DEVICES is sufficient if neverForLocation is used
             ContextCompat.checkSelfPermission(
                 context, Manifest.permission.NEARBY_WIFI_DEVICES
             ) == PackageManager.PERMISSION_GRANTED
-        } else true
-
-        return hasLocation && hasNearby
+        } else {
+            // On older versions, location permission is required
+            val hasFine = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            hasFine || hasCoarse
+        }
     }
 
     fun getWifiDirectBroadcastReceiver(): BroadcastReceiver {
@@ -620,11 +634,20 @@ class WifiCommunicationService @Inject constructor(
             onDeviceChanged = { device ->
                 /* Update local device info */
                 localDeviceInfo = device
-                device?.let {
+                device.let {
                     _deviceName.value = it.deviceName
                     Log.d("WifiCommService", "Local device updated: ${it.deviceName} (${it.deviceAddress})")
                 }
             }
         )
+    }
+
+    private fun addDiscoveredPeer(discoveredPeer: WifiDirectPeer) {
+        val currentPeers = _discoveredPeers.value.toMutableList()
+
+        if (!currentPeers.contains(discoveredPeer)) {
+            currentPeers.add(discoveredPeer)
+            _discoveredPeers.value = currentPeers
+        }
     }
 }

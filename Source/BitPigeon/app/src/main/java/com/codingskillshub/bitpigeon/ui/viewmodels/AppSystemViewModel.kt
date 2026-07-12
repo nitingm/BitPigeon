@@ -24,9 +24,6 @@ class AppSystemViewModel @Inject constructor(
 
     val deviceName = wifiService.deviceName
 
-    // Service discovery
-    val discoveredUsers = wifiService.discoveredUsers
-
     val appTheme: StateFlow<Pair<String, String>> = appSystemModel.getAppTheme()
         .map { theme ->
             when (theme) {

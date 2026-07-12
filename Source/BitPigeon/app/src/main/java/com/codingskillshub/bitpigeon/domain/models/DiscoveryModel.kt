@@ -10,9 +10,15 @@ import com.codingskillshub.bitpigeon.domain.services.QRCodeService
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.domain.types.QRCodePayload
 import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 class DiscoveryModel @Inject constructor(
@@ -23,11 +29,22 @@ class DiscoveryModel @Inject constructor(
     private val configurationService: ConfigurationService
 ){
 
-    private val _nearbyPeers = MutableStateFlow<List<WifiDirectPeer>>(emptyList())
-    val nearbyPeers: StateFlow<List<WifiDirectPeer>> = _nearbyPeers
+    private val _scannedPeers = MutableStateFlow<List<WifiDirectPeer>>(emptyList())
 
-    val discoveredUsers: StateFlow<Map<String, Pair<User, WifiP2pDevice>>> = wifiService.discoveredUsers
-
+    val nearbyPeers: StateFlow<List<WifiDirectPeer>> = combine(
+        wifiService.discoveredPeers,
+        _scannedPeers,
+        wifiService.peersList
+    ) { discovered, scanned, peers ->
+        val filteredScanned = scanned.filter { sPeer ->
+            peers.any { it.deviceName == sPeer.deviceName || it.deviceAddress == sPeer.deviceMacAddress }
+        }
+        (discovered + filteredScanned).distinctBy { it.deviceMacAddress }
+    }.stateIn(
+        scope = CoroutineScope(Dispatchers.Default + SupervisorJob()),
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     suspend fun prepareQrPayloadText(): String {
         val myId = configurationService.userIdFlow.firstOrNull() ?: ""
@@ -43,14 +60,14 @@ class DiscoveryModel @Inject constructor(
         if (connectionInfo != null && !connectionInfo.isGroupOwner) {
             val groupOwnerClient = onlineChatService.availablePeerClients.value.find { it.isGroupOwner }
             val groupOwnerUser = groupOwnerClient?.user
-            val ownerDevice = discoveredUsers.value.values.firstOrNull { (user, _) ->
-                user.id == groupOwnerUser?.id
-            }?.second
+            val ownerDevice = nearbyPeers.value.firstOrNull { nPeer ->
+                nPeer.userId == groupOwnerUser?.id
+            }
 
             payloadText = qrCodeService.createPayloadText(
                 userId = groupOwnerUser?.id ?: localUserId,
                 userName = groupOwnerUser?.name ?: localUserName,
-                deviceAddress = ownerDevice?.deviceAddress ?: localDeviceAddress,
+                deviceAddress = ownerDevice?.deviceMacAddress ?: localDeviceAddress,
                 deviceName = ownerDevice?.deviceName ?: "Group Owner"
             )
             return payloadText
@@ -67,14 +84,21 @@ class DiscoveryModel @Inject constructor(
         return payloadText
     }
 
-    fun findDeviceForPayload(payload: QRCodePayload): WifiP2pDevice? {
+    fun findDeviceInPeers(deviceName: String, deviceAddress: String): WifiP2pDevice? {
         val discoveredPeers = wifiService.getDiscoveredPeers()
-        return discoveredPeers.find { it.deviceAddress == payload.deviceAddress || it.deviceName == payload.deviceName }
+        return discoveredPeers.find { it.deviceAddress == deviceAddress || it.deviceName == deviceName }
     }
 
     fun connectToPeerFromPayloadText(qrText: String): Boolean {
         val payload = qrCodeService.parsePayloadText(qrText) ?: return false
-        val device = findDeviceForPayload(payload)
+        addToScannedPeers(WifiDirectPeer(
+            deviceName = payload.deviceName,
+            deviceMacAddress = payload.deviceAddress,
+            isGroupOwner = false,
+            userId = payload.userId,
+            userName = payload.userName
+        ))
+        val device = findDeviceInPeers(payload.deviceName, payload.deviceAddress)
         Log.d("QRCodeService", "qrText = $qrText, payload = $payload")
         if (device != null) {
             wifiService.connectToPeer(device)
@@ -83,5 +107,24 @@ class DiscoveryModel @Inject constructor(
         }
 
         return true
+    }
+
+    fun connectToNearbyPeer(peer: WifiDirectPeer) {
+        val device = findDeviceInPeers(peer.deviceName, peer.deviceMacAddress)
+        wifiService.connectToPeer(device ?: return)
+    }
+
+    private fun addToScannedPeers(discoveredPeer: WifiDirectPeer) {
+        val currentPeers = _scannedPeers.value.toMutableList()
+
+        if (!currentPeers.contains(discoveredPeer)) {
+            currentPeers.add(discoveredPeer)
+            _scannedPeers.value = currentPeers
+        }
+    }
+    
+    fun exitGroup() {
+        wifiService.leaveGroup()
+        _scannedPeers.value = emptyList()
     }
 }

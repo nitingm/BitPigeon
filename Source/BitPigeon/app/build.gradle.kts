@@ -16,10 +16,18 @@ android {
         applicationId = "com.codingskillshub.bitpigeon"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // Forces the linker to use 16KB page alignment
+                arguments("-DANDROID_ALIGNED_16K=ON")
+                cppFlags("-Wl,-z,max-page-size=16384")
+            }
+        }
     }
 
     buildTypes {
@@ -41,10 +49,16 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
     implementation(libs.androidx.compose.material3)
+    implementation(libs.firebase.firestore)
     val room_version = "2.6.1"
 
     implementation(libs.androidx.core.ktx)
@@ -89,7 +103,7 @@ dependencies {
     implementation(libs.coil.video)
 
     // Image processing and graphics and media
-    implementation("androidx.graphics:graphics-core:1.0.0-alpha03")
+    implementation("androidx.graphics:graphics-core:1.0.4")
     implementation("androidx.compose.foundation:foundation:1.8.0")
     implementation("androidx.exifinterface:exifinterface:1.3.7")
 
@@ -97,4 +111,7 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
+
+    // Lifecycle runtime compose for LocalLifecycleOwner
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 }

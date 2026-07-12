@@ -102,14 +102,12 @@ class AttachmentModel @Inject constructor(
                 val clients = getOnlineClientsForChatGroup(chatGroupId)
                 if (clients.isEmpty()) return@launch
 
-                attachmentsWithUris.forEach { (attachment, uri) ->
-                    clients.forEach { client ->
-                        launch {
-                            try {
-                                fileTransferService.sendAttachmentToClient(attachment, uri.toString(), client)
-                            } catch (e: Exception) {
-                                // Transfer failed for this client
-                            }
+                clients.forEach { client ->
+                    launch {
+                        try {
+                            fileTransferService.sendAttachmentsToClient(attachmentsWithUris, client)
+                        } catch (e: Exception) {
+                            // Transfer failed for this client
                         }
                     }
                 }
@@ -212,8 +210,8 @@ class AttachmentModel @Inject constructor(
 
     private fun Attachment.toMediaPreviewOrNull(): AttachmentPreviewData? {
         val uri = filePath.toUri()
-        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
-                (fileType.startsWith("image/", ignoreCase = true) ||
+//        val isLocalImage = fileStorageService.checkFileExist(fileName, uri) &&
+        val isLocalImage = (fileType.startsWith("image/", ignoreCase = true) ||
                         fileType.startsWith("video/", ignoreCase = true))
 
         return if (isLocalImage) {

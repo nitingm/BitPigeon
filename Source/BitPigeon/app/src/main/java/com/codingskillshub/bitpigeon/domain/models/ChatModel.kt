@@ -61,7 +61,7 @@ class ChatModel @Inject constructor(
         }
         .stateIn(
             // We use the application-level scope usually or define one in the model
-            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + kotlinx.coroutines.SupervisorJob()),
+            scope = CoroutineScope(Dispatchers.Main + SupervisorJob()),
             started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
@@ -70,6 +70,7 @@ class ChatModel @Inject constructor(
         serviceScope.launch {
             onlineChatService.incomingMessages.collect { message ->
                 chatDao.insertMessage(message)
+                audioService.playMessageReceivedSound()
             }
         }
     }

@@ -162,6 +162,15 @@ class OnlineChatService @Inject constructor(
         return availablePeerClients.value.find { it.user.id == clientId }
     }
 
+    fun disconnectFromGroup() {
+        chatClient?.disconnectFromServer()
+        chatClient = null
+    }
+
+    fun destroyGroup() {
+        stopAll()
+    }
+
     private fun stopAll() {
         Log.d("OnlineChatService", "Stopping all connection")
         adhocServer?.stopServer()

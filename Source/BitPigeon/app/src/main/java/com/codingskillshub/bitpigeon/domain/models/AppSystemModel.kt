@@ -1,8 +1,10 @@
 package com.codingskillshub.bitpigeon.domain.models
 
 import android.content.Context
+import android.content.pm.PackageManager
 import androidx.core.net.toUri
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import android.util.Log
 import com.codingskillshub.bitpigeon.common.ConfigurationService
@@ -30,6 +32,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import com.codingskillshub.bitpigeon.common.HashService
+import com.codingskillshub.bitpigeon.domain.entities.User
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,6 +82,21 @@ class AppSystemModel @Inject constructor(
 
     private suspend fun initializeUserId() {
         configurationService.generateAndSaveUserId()
+        configurationService.userIdFlow.first()?.let {
+            myUserId = it
+            if (userDao.getUserById(myUserId).firstOrNull() == null) {
+                val initUser = User(
+                    id = myUserId,
+                    name = "You",
+                    deviceAddress = "",
+                    phoneNumber = "",
+                    email = "",
+                    profilePicture = "",
+                    status = ""
+                )
+                userDao.insertOrUpdateUser(initUser)
+            }
+        }
     }
 
     fun getDeviceAddress(): StateFlow<String> {
@@ -92,7 +111,9 @@ class AppSystemModel @Inject constructor(
         modelScope.launch {
             configurationService.updateUserName(name)
             userDao.updateUserName(getMyUserId(), name)
-            onlineChatService.sendUserInfoUpdate(userDao.getUserById(getMyUserId()).firstOrNull()!!)
+            userDao.getUserById(getMyUserId()).firstOrNull()?.let {
+                onlineChatService.sendUserInfoUpdate(it)
+            }
         }
     }
 
@@ -149,7 +170,9 @@ class AppSystemModel @Inject constructor(
                     outputStream.close()
                     fileUri?.let { onSuccess(it) }
                     userDao.updateProfilePicture(userId, finalFileName)
-                    onlineChatService.sendUserInfoUpdate(userDao.getUserById(getMyUserId()).firstOrNull()!!)
+                    userDao.getUserById(getMyUserId()).firstOrNull()?.let {
+                        onlineChatService.sendUserInfoUpdate(it)
+                    }
                 } else {
                     throw Exception("Failed to crop and save image")
                 }
@@ -198,7 +221,7 @@ class AppSystemModel @Inject constructor(
                 Log.d("AppSystemModel", "Processing file:// URI with path: $filePath")
 
                 if (filePath != null) {
-                    val file = java.io.File(filePath)
+                    val file = File(filePath)
                     Log.d("AppSystemModel", "File exists: ${file.exists()}, absolute path: ${file.absolutePath}")
 
                     if (file.exists()) {
@@ -313,8 +336,8 @@ class AppSystemModel @Inject constructor(
     }
 
     fun getAppVersion(): String {
-        val packageInfo = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0))
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
         } else {
             context.packageManager.getPackageInfo(context.packageName, 0)
         }

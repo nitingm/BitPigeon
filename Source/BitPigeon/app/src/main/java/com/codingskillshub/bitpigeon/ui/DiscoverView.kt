@@ -42,6 +42,7 @@ import androidx.navigation.NavController
 import com.codingskillshub.bitpigeon.R
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredGroupEntry
 import com.codingskillshub.bitpigeon.ui.composables.DiscoveredPeerEntry
 import com.codingskillshub.bitpigeon.ui.theme.AppTheme
@@ -55,8 +56,7 @@ fun DiscoverView(
     navController: NavController,
     discoverViewModel: DiscoverViewModel = viewModel()
 ) {
-    val discoveredUsers by discoverViewModel.discoveredUsers.collectAsState()
-    val usersList = discoveredUsers.values.toList()
+    val discoveredPeers by discoverViewModel.nearbyPeers.collectAsState()
     val availablePeerClients by discoverViewModel.availableClients.collectAsState()
     val isRefreshing by discoverViewModel.isRefreshing.collectAsState()
     val isWifiDirectServiceAdvertisingEnabled by discoverViewModel.isWifiDirectServiceAdvertisingEnabled.collectAsState()
@@ -73,7 +73,7 @@ fun DiscoverView(
 
     DiscoverViewContent(
         isWifiDirectServiceAdvertisingEnabled,
-        usersList,
+        discoveredPeers,
         groupOwnerName = groupOwnerName,
         availablePeerClients,
         isRefreshing,
@@ -84,7 +84,8 @@ fun DiscoverView(
         onOpenDirectChat = { user -> discoverViewModel.createAndOpenDirectChat(user) },
         onSwitchAdvertising = { enabled -> discoverViewModel.switchAdvertising(enabled)},
         onShowQr = { discoverViewModel.showQrPopup() },
-        onScanQr = { discoverViewModel.openScanner() }
+        onScanQr = { discoverViewModel.openScanner() },
+        onGroupExit = { discoverViewModel.exitGroup() }
     )
 
     if (showQrPopup) {
@@ -105,18 +106,19 @@ fun DiscoverView(
 @Composable
 fun DiscoverViewContent(
     isWifiDirectServiceAdvertisingEnabled: Boolean = false,
-    usersList: List<Pair<User, WifiP2pDevice>>,
+    usersList: List<WifiDirectPeer> = emptyList(),
     groupOwnerName: String = "",
     availablePeerClients: List<Client> = emptyList(),
     isRefreshing: Boolean = false,
     isWifiEnabled: Boolean = true,
     isConnectedToGroup: Boolean = false,
     onRefresh: () -> Unit = {},
-    onConnectToPeer: (WifiP2pDevice) -> Unit = {},
+    onConnectToPeer: (WifiDirectPeer) -> Unit = {},
     onOpenDirectChat: (User) -> Unit = {},
     onSwitchAdvertising: (Boolean) -> Unit = {},
     onShowQr: () -> Unit = {},
-    onScanQr: () -> Unit = {}
+    onScanQr: () -> Unit = {},
+    onGroupExit: () -> Unit = {}
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Box(
@@ -168,6 +170,9 @@ fun DiscoverViewContent(
                             availablePeerClients,
                             onClick = { user ->
                                 onOpenDirectChat(user)
+                            },
+                            onGroupExit = {
+                                onGroupExit()
                             }
                         )
                     }
@@ -201,11 +206,11 @@ fun DiscoverViewContent(
                         items(
                             items = usersList,
                             // Providing a 'key' helps Compose optimize list updates/reordering
-                            key = { (_, device) -> device.deviceAddress }
-                        ) { (user, device) ->
+                            key = { device -> device.deviceMacAddress }
+                        ) { device ->
                             DiscoveredPeerEntry(
-                                name = user.name,
-                                statusString = "${user.email} (${device.deviceName})",
+                                name = device.userName,
+                                statusString = "(${device.deviceName})",
                                 onClick = { onConnectToPeer(device) }
                             )
                         }
@@ -297,16 +302,15 @@ private fun WifiDisabledState(message: String) {
 @Preview(showBackground = true)
 @Composable
 fun DiscoverViewPreview() {
-    // Each WifiP2pDevice needs a unique deviceAddress to avoid duplicate keys in LazyColumn
-    val sampleUsers = listOf(
-        Pair(User("1", "Aman Gupta", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:01"; deviceName = "Aman's Phone" }),
-        Pair(User("2", "John Doe", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:02"; deviceName = "John's Phone" }),
-        Pair(User("3", "Project Group", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:03"; deviceName = "Project Group" }),
-        Pair(User("4", "Mama", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:04"; deviceName = "Mama's Phone" }),
-        Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
+    val samplePeers = listOf(
+        WifiDirectPeer(deviceName = "Aman's Phone", deviceMacAddress = "00:00:00:00:00:01", userName = "Aman Gupta", userId = "1"),
+        WifiDirectPeer(deviceName = "John's Phone", deviceMacAddress = "00:00:00:00:00:02", userName = "John Doe", userId = "2"),
+        WifiDirectPeer(deviceName = "Project Group", deviceMacAddress = "00:00:00:00:00:03", userName = "Project Group", userId = "3"),
+        WifiDirectPeer(deviceName = "Mama's Phone", deviceMacAddress = "00:00:00:00:00:04", userName = "Mama", userId = "4"),
+        WifiDirectPeer(deviceName = "Support Device", deviceMacAddress = "00:00:00:00:00:05", userName = "BitPigeon Support", userId = "5")
     )
 
-    DiscoverViewContent(true, sampleUsers, isConnectedToGroup = false)
+    DiscoverViewContent(true, samplePeers, isConnectedToGroup = false)
 }
 
 @Preview(showBackground = true)
@@ -325,15 +329,14 @@ fun DiscoverViewWifiDisabledStatePreview() {
 @Preview(showBackground = true)
 @Composable
 fun DiscoverViewDarkPreview() {
-    // Each WifiP2pDevice needs a unique deviceAddress to avoid duplicate keys in LazyColumn
-    val sampleUsers = listOf(
-        Pair(User("1", "Aman Gupta", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:01"; deviceName = "Aman's Phone" }),
-        Pair(User("2", "John Doe", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:02"; deviceName = "John's Phone" }),
-        Pair(User("3", "Project Group", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:03"; deviceName = "Project Group" }),
-        Pair(User("4", "Mama", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:04"; deviceName = "Mama's Phone" }),
-        Pair(User("5", "BitPigeon Support", "none", "none", "none", "none"), WifiP2pDevice().apply { deviceAddress = "00:00:00:00:00:05"; deviceName = "Support Device" })
+    val samplePeers = listOf(
+        WifiDirectPeer(deviceName = "Aman's Phone", deviceMacAddress = "00:00:00:00:00:01", userName = "Aman Gupta", userId = "1"),
+        WifiDirectPeer(deviceName = "John's Phone", deviceMacAddress = "00:00:00:00:00:02", userName = "John Doe", userId = "2"),
+        WifiDirectPeer(deviceName = "Project Group", deviceMacAddress = "00:00:00:00:00:03", userName = "Project Group", userId = "3"),
+        WifiDirectPeer(deviceName = "Mama's Phone", deviceMacAddress = "00:00:00:00:00:04", userName = "Mama", userId = "4"),
+        WifiDirectPeer(deviceName = "Support Device", deviceMacAddress = "00:00:00:00:00:05", userName = "BitPigeon Support", userId = "5")
     )
     AppTheme("DARK") {
-        DiscoverViewContent(true, sampleUsers)
+        DiscoverViewContent(true, samplePeers)
     }
 }

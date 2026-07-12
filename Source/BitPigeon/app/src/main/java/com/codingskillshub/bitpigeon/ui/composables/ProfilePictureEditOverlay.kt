@@ -300,9 +300,9 @@ fun ProfilePictureEditOverlayContent(
                             contentColor = MaterialTheme.colorScheme.primary,
                             disabledContentColor = MaterialTheme.colorScheme.outlineVariant
                         ),
-//                        contentPadding = ButtonDefaults.ContentPadding,
+                        contentPadding = ButtonDefaults.ContentPadding,
 //                        enabled = !isSaving && fitImageSize.width > 0 && cropSize > 0,
-                        modifier = Modifier.height(60.dp)
+                        modifier = Modifier.height(50.dp)
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(
@@ -313,7 +313,11 @@ fun ProfilePictureEditOverlayContent(
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         }
-                        Text("Save", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            text = "Save",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
             }

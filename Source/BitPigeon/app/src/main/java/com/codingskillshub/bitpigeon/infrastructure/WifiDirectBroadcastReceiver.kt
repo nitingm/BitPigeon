@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.NetworkInfo
 import android.net.wifi.p2p.WifiP2pDevice
 import android.net.wifi.p2p.WifiP2pManager
+import java.net.NetworkInterface
+import java.util.Collections
 import android.util.Log
 
 /**
@@ -48,13 +50,25 @@ class WifiDirectBroadcastReceiver(
             WifiP2pManager.WIFI_P2P_THIS_DEVICE_CHANGED_ACTION -> {
                 Log.d("WifiDirectBR", "This device changed")
                 val device = intent.getParcelableExtra<WifiP2pDevice>(WifiP2pManager.EXTRA_WIFI_P2P_DEVICE)
-                device?.let{
-                    onDeviceChanged(device)
+                device?.let {
+                    onDeviceChanged(it)
                 }
             }
 
             WifiP2pManager.WIFI_P2P_DISCOVERY_CHANGED_ACTION -> {
                 Log.d("WifiDirectBR", "Discovery changed")
+                val state = intent.getIntExtra(WifiP2pManager.EXTRA_DISCOVERY_STATE, -1)
+
+                when (state) {
+                    WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED -> {
+                        Log.d("WifiDirectBR", "Discovery Started")
+                        // You could trigger a UI loading spinner here
+                    }
+                    WifiP2pManager.WIFI_P2P_DISCOVERY_STOPPED -> {
+                        Log.d("WifiDirectBR", "Discovery Stopped")
+                        // You could hide the loading spinner here
+                    }
+                }
             }
         }
     }
