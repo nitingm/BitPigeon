@@ -224,28 +224,33 @@ class AttachmentModel @Inject constructor(
             )
         } else null
     }
-    
+
     suspend fun getAttachmentPreviewDataForMessage(messageId: String): List<AttachmentPreviewData> {
         val attachments = attachmentDao.getAttachmentsForMessageSync(messageId)
-        val directory = File(context.getExternalFilesDir(null), "BitPigeon")
-        
-        return attachments.mapNotNull { attachment ->
-            val file = File(directory, attachment.fileName)
-            val isProcessing = attachment.transferStatus == TransferStatus.TRANSFERRING || 
-                              attachment.transferStatus == TransferStatus.PENDING
-            
-            if (isProcessing || file.exists()) {
-                AttachmentPreviewData(
-                    id = attachment.id,
-                    fileName = attachment.fileName,
-                    fileType = attachment.fileType,
-                    fileUri = Uri.fromFile(file),
-                    isTransferring = isProcessing,
-                    progress = 0
-                )
+
+        return attachments.map { attachment ->
+            val uri = attachment.filePath.toUri()
+
+            // Check if it's a content URI (original file) or a local file (received file)
+            val finalUri = if (uri.scheme == "content") {
+                uri
             } else {
-                null
+                // This handles received files that WERE saved to your directory
+                val file = File(attachmentsDirectory, attachment.fileName)
+                Uri.fromFile(file)
             }
+
+            val isProcessing = attachment.transferStatus == TransferStatus.TRANSFERRING ||
+                    attachment.transferStatus == TransferStatus.PENDING
+
+            AttachmentPreviewData(
+                id = attachment.id,
+                fileName = attachment.fileName,
+                fileType = attachment.fileType,
+                fileUri = finalUri,
+                isTransferring = isProcessing,
+                progress = 0
+            )
         }
     }
 

@@ -87,6 +87,9 @@ class DiscoverViewModel @Inject constructor(
     private val _qrPayloadText = MutableStateFlow("")
     val qrPayloadText: StateFlow<String> = _qrPayloadText.asStateFlow()
 
+    private val _isQrValid = MutableStateFlow(false)
+    val isQrValid: StateFlow<Boolean> = _isQrValid.asStateFlow()
+
     private val _scanError = MutableStateFlow<String?>(null)
     val scanError: StateFlow<String?> = _scanError.asStateFlow()
 
@@ -130,7 +133,13 @@ class DiscoverViewModel @Inject constructor(
     fun showQrPopup() {
         viewModelScope.launch {
             _scanError.value = null
-            _qrPayloadText.value = discoveryModel.prepareQrPayloadText()
+
+            val qrPayload = discoveryModel.prepareQrPayloadText()
+            _qrPayloadText.value = qrPayload.first
+            _isQrValid.value = qrPayload.second
+            if (!_isQrValid.value) {
+                _qrPayloadText.value = "Internal Error\nInvalid QR"
+            }
             _showQrPopup.value = true
         }
     }

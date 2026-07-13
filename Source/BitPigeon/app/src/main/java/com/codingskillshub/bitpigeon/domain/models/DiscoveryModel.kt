@@ -46,7 +46,7 @@ class DiscoveryModel @Inject constructor(
         initialValue = emptyList()
     )
 
-    suspend fun prepareQrPayloadText(): String {
+    suspend fun prepareQrPayloadText(): Pair<String, Boolean> {
         val myId = configurationService.userIdFlow.firstOrNull() ?: ""
         val user = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
         val localUserId = user.id
@@ -55,7 +55,11 @@ class DiscoveryModel @Inject constructor(
         val localDeviceName = localDeviceInfo?.deviceName ?: "Unknown Device"
         val localDeviceAddress = localDeviceInfo?.deviceAddress ?: "Unknown Address"
         val connectionInfo = wifiService.connectionInfo.value
-        var payloadText: String
+        
+        val finalUserId: String
+        val finalUserName: String
+        val finalDeviceAddress: String
+        val finalDeviceName: String
 
         if (connectionInfo != null && !connectionInfo.isGroupOwner) {
             val groupOwnerClient = onlineChatService.availablePeerClients.value.find { it.isGroupOwner }
@@ -64,24 +68,31 @@ class DiscoveryModel @Inject constructor(
                 nPeer.userId == groupOwnerUser?.id
             }
 
-            payloadText = qrCodeService.createPayloadText(
-                userId = groupOwnerUser?.id ?: localUserId,
-                userName = groupOwnerUser?.name ?: localUserName,
-                deviceAddress = ownerDevice?.deviceMacAddress ?: localDeviceAddress,
-                deviceName = ownerDevice?.deviceName ?: "Group Owner"
-            )
-            return payloadText
+            finalUserId = groupOwnerUser?.id ?: localUserId
+            finalUserName = groupOwnerUser?.name ?: localUserName
+            finalDeviceAddress = ownerDevice?.deviceMacAddress ?: localDeviceAddress
+            finalDeviceName = ownerDevice?.deviceName ?: "Group Owner"
         } else {
-            payloadText = qrCodeService.createPayloadText(
-                userId = localUserId,
-                userName = localUserName,
-                deviceAddress = localDeviceAddress,
-                deviceName = localDeviceName
-            )
+            finalUserId = localUserId
+            finalUserName = localUserName
+            finalDeviceAddress = localDeviceAddress
+            finalDeviceName = localDeviceName
         }
-        Log.d("DiscoverViewModel", "QR Payload text = $payloadText")
 
-        return payloadText
+        val payloadText = qrCodeService.createPayloadText(
+            userId = finalUserId,
+            userName = finalUserName,
+            deviceAddress = finalDeviceAddress,
+            deviceName = finalDeviceName
+        )
+        
+        val isValid = finalDeviceAddress != "Unknown Address" && 
+                      finalDeviceAddress != "" && 
+                      finalDeviceName != "Unknown Device"
+
+        Log.d("DiscoverViewModel", "QR Payload text = $payloadText, isValid = $isValid")
+
+        return Pair(payloadText, isValid)
     }
 
     fun findDeviceInPeers(deviceName: String, deviceAddress: String): WifiP2pDevice? {

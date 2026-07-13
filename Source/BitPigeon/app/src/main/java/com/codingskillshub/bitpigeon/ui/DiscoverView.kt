@@ -66,6 +66,7 @@ fun DiscoverView(
     val showQrPopup by discoverViewModel.showQrPopup.collectAsState()
     val showScanner by discoverViewModel.showScanner.collectAsState()
     val qrPayloadText by discoverViewModel.qrPayloadText.collectAsState()
+    val isQrValid by discoverViewModel.isQrValid.collectAsState()
 
     discoverViewModel.onChatGroupInvoked = { groupId ->
         navController.navigate("chatview/$groupId")
@@ -91,6 +92,7 @@ fun DiscoverView(
     if (showQrPopup) {
         QRCodePopUp(
             payloadText = qrPayloadText,
+            isQrValid = isQrValid,
             onDismiss = { discoverViewModel.hideQrPopup() }
         )
     }

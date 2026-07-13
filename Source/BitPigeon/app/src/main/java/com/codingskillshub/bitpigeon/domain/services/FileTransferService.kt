@@ -34,7 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.sql.ClientInfoStatus
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +51,7 @@ class FileTransferService @Inject constructor(
     private var selfUser: User? = null
     private val clients = CopyOnWriteArrayList<Client>()
     private val clientsMutex = Mutex()
+    private val startStopMutex = Mutex()
 
     // StateFlow exposing a list of (attachmentId, progress) pairs
     private val _transferProgress = MutableStateFlow<List<Pair<String, Int>>>(emptyList())
@@ -67,20 +67,36 @@ class FileTransferService @Inject constructor(
 
     fun startFileTransferServer() {
         serviceScope.launch {
-            val myId = configurationService.userIdFlow.firstOrNull() ?: ""
-            val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
-            selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
+            startStopMutex.withLock {
+                if (serverSocketManager != null) {
+                    Log.d("FileTransferService", "FileTransferServer already running")
+                    return@withLock
+                }
 
-            serverSocketManager = ServerSocketManager(PORT, "FSS").apply {
-                onClientConnected = { client -> handleClientConnection(client) }
-                onClientDisconnected = { clientId -> handleClientDisconnection(clientId) }
-                startForFileTransfer()
+                val myId = configurationService.userIdFlow.firstOrNull() ?: ""
+                selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
+
+                serverSocketManager = ServerSocketManager(PORT, "FSS").apply {
+                    onClientConnected = { client -> handleClientConnection(client) }
+                    onClientDisconnected = { clientId -> handleClientDisconnection(clientId) }
+                    start()
+                }
+                Log.d("FileTransferService", "FileTransferServer started on port $PORT")
             }
         }
     }
 
     fun stopFileTransferServer() {
-        serverSocketManager?.stop()
+        serviceScope.launch {
+            startStopMutex.withLock {
+                serverSocketManager?.let {
+                    Log.d("FileTransferService", "Stopping FileTransferServer")
+                    it.stop()
+                    serverSocketManager = null
+                }
+                clients.clear()
+            }
+        }
     }
 
     private fun updateProgress(attachmentId: String, progress: Int?) {
@@ -138,6 +154,7 @@ class FileTransferService @Inject constructor(
 
     private suspend fun receiveFile(attachment: Attachment, clientId: String) {
         try {
+            Log.d("FileTransferService", "Receiving attachment: $attachment")
             attachmentDao.insertAttachment(attachment.copy(transferStatus = TransferStatus.TRANSFERRING))
             updateProgress(attachment.id, 0)
 
@@ -248,7 +265,6 @@ class FileTransferService @Inject constructor(
 
     suspend fun sendAttachmentToLocal(attachment: Attachment, fileUri: String) = withContext(Dispatchers.IO) {
         try {
-            Log.d("FileTransferService","[sendAttachmentToLocal] Starting local copy")
             Log.d("FileTransferService","[sendAttachmentToLocal] File URI: $fileUri, Size: ${attachment.fileSize} bytes")
 
             updateProgress(attachment.id, 0)
@@ -293,7 +309,7 @@ class FileTransferService @Inject constructor(
 
     private suspend fun receiveAppFile(appFile: AppFile, clientId: String) {
         try {
-
+            Log.d("FileTransferService", "Receiving App File: $appFile")
             val (outputStream, uri) = fileStorageService.getOutputStream(appFile.fileName, appFile.storeIn == StoreIn.PRIVATE_STORAGE)
 
             outputStream.use { output ->
@@ -382,6 +398,7 @@ class FileTransferService @Inject constructor(
     private fun handleClientConnection(client: Client) {
         serviceScope.launch {
             clientsMutex.withLock {
+                Log.d("FileTransferService", "New client connected: $client")
                 clients.add(client)
                 waitForIncomingFileFromClient(clientId = client.user.id)
             }

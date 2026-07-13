@@ -160,7 +160,14 @@ class WifiCommunicationService @Inject constructor(
 
         if (enabled) {
             if (hasWifiDirectPermissions()) {
-                discoverPeers()
+                // BUG FIX: Only call discoverPeersWithCleanUp (which removes groups)
+                // if we are not currently connected. This prevents connection drops
+                // when the app resumes (e.g., after picking a profile picture).
+                if (_connectionInfo.value == null) {
+                    discoverPeersWithCleanUp()
+                } else {
+                    Log.d("WifiCommService", "Already connected, skipping aggressive peer discovery clean-up")
+                }
                 startServiceDiscovery()
             } else {
                 Log.w("WifiCommService", "Skipping discovery: Permissions not yet granted.")
@@ -187,6 +194,36 @@ class WifiCommunicationService @Inject constructor(
                 }
             })
         }
+    }
+
+    private fun discoverPeersWithCleanUp() {
+        if (hasWifiDirectPermissions()) {
+            // 1. Force remove any existing groups.
+            // This is the "magic" that happens when you enter system settings.
+            manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
+                override fun onSuccess() {
+                    startActualDiscovery()
+                }
+
+                override fun onFailure(reason: Int) {
+                    // Usually fails with BUSY if no group exists, which is fine
+                    startActualDiscovery()
+                }
+            })
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startActualDiscovery() {
+        // 2. Stop any existing discovery first to reset the state machine
+        manager.stopPeerDiscovery(channel, object : WifiP2pManager.ActionListener {
+            override fun onSuccess() {
+                discoverPeers()
+            }
+            override fun onFailure(reason: Int) {
+                discoverPeers()
+            }
+        })
     }
 
     @SuppressLint("MissingPermission")
@@ -520,15 +557,19 @@ class WifiCommunicationService @Inject constructor(
 
         // 1. Sequentially stop existing discovery and wait for callback
         stopServiceDiscoverySuspend()
-        
-        // 2. Clear current lists
+
+        // 3. Force clear all requests as a safety measure
+        manager.clearServiceRequests(channel, null)
+
+        delay(300)
+
         _discoveredServices.value = emptyMap()
         _discoveredPeers.value = emptyList()
 
-        // 3. Sequentially restart discovery and wait for callback
+        // 4. Sequentially restart discovery and wait for callback
         startServiceDiscoverySuspend()
 
-        // 4. Give discovery some time to populate results
+        // 5. Give discovery some time to populate results
         withTimeoutOrNull(5000) {
             delay(3000) 
         }

@@ -26,27 +26,9 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
     private val configurationService: ConfigurationService,
-    private val fileStorageService: FileStorageService,
     private val appSystemModel: AppSystemModel,
     private val attachmentModel: AttachmentModel
 ) : ViewModel() {
-
-    init {
-        // Initialize profile picture URI from stored userId filename if available
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val userId = appSystemModel.getMyUserId()
-                val filePair = fileStorageService.getPrivateFileByName(userId)
-                if (filePair != null) {
-                    _profilePictureUri.value = filePair.second
-                } else {
-                    Log.e("ProfileViewModel", "Profile picture file not found")
-                }
-            } catch (e: Exception) {
-                // ignore initialization errors
-            }
-        }
-    }
 
     val userName: StateFlow<String> = configurationService.userNameFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DefaultUser")
@@ -60,9 +42,8 @@ class ProfileViewModel @Inject constructor(
     val statusLabel: StateFlow<String> = configurationService.statusLabel
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DefaultStatus")
 
-    // Profile picture URI state
-    private val _profilePictureUri = MutableStateFlow<Uri?>(null)
-    val profilePictureUri: StateFlow<Uri?> = _profilePictureUri.asStateFlow()
+    val profilePictureUri: StateFlow<String?> = configurationService.profilePicture
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun updateUserName(name: String) {
         appSystemModel.updateUserName(name)
@@ -111,9 +92,6 @@ class ProfileViewModel @Inject constructor(
             displayWidth,
             displayHeight,
             {
-                val oldUri = _profilePictureUri.value
-                _profilePictureUri.value = it
-                oldUri?.let { fileStorageService.deletePrivateFileByUri(it) }
                 onSuccess()
                 _isSavingProfilePicture.value = false
             }

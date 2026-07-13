@@ -168,8 +168,13 @@ class AppSystemModel @Inject constructor(
 
                 if (success) {
                     outputStream.close()
-                    fileUri?.let { onSuccess(it) }
                     userDao.updateProfilePicture(userId, finalFileName)
+                    val oldProfilePicture = configurationService.profilePicture.firstOrNull()
+                    fileUri.let {
+                        configurationService.updateProfilePicture(it.toString())
+                        onSuccess(it)
+                    }
+                    oldProfilePicture?.let { fileStorageService.deletePrivateFileByUri(it.toUri()) }
                     userDao.getUserById(getMyUserId()).firstOrNull()?.let {
                         onlineChatService.sendUserInfoUpdate(it)
                     }
@@ -194,15 +199,11 @@ class AppSystemModel @Inject constructor(
             val client = onlineChatService.getPeerClientById(appFileRequest.senderId)
             if (client != null) {
                 Log.d("AppSystemModel", "Sending profile picture to client: ${client.user.name}")
-                val myPPFile = fileStorageService.getPrivateFileByName(myProfilePicture)
-
-                if (myPPFile != null) {
-                    val myPPUri: Uri = myPPFile.second
-                    Log.d("AppSystemModel", "myPPUri = $myPPUri")
-                    val appFile = createAppFileFromUri(myPPUri, appFileRequest.id, AppFileType.PROFILE_PICTURE)
+                configurationService.profilePicture.firstOrNull()?.let { picture ->
+                    val appFile = createAppFileFromUri(picture.toUri(), appFileRequest.id, AppFileType.PROFILE_PICTURE)
                     Log.d("AppSystemModel", "appFIle = $appFile")
                     appFile?.let {
-                        fileTransferService.sendAppFileToClient(appFile, myPPUri.toString(), client)
+                        fileTransferService.sendAppFileToClient(appFile, picture, client)
                     }
                 }
             }

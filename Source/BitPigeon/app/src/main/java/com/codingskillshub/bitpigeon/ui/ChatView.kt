@@ -45,7 +45,7 @@ fun ChatView(
     val attachmentUris = remember { mutableStateListOf<Uri>() }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris: List<Uri> ->
         attachmentUris.addAll(uris)
     }
@@ -67,7 +67,7 @@ fun ChatView(
             }
         },
         onAttachClick = {
-            filePickerLauncher.launch("*/*")
+            filePickerLauncher.launch(arrayOf("*/*"))
         },
         onBackClick = {
             navController.popBackStack()

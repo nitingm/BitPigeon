@@ -38,7 +38,7 @@ class AdhocServer {
 
     fun startServer(port: Int) {
         serverScope.launch {
-            serverSocketManager = ServerSocketManager(port).apply {
+            serverSocketManager = ServerSocketManager(port, "CSS").apply {
                 onMessageReceived = { message, clientId -> handleClientRequest(message, clientId) }
                 onClientConnected = { client -> handleClientConnection(client) }
                 onClientDisconnected = { clientId -> handleClientDisconnection(clientId) }
