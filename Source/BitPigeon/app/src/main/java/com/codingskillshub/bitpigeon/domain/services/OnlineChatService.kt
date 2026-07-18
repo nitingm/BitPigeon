@@ -8,11 +8,11 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
 import com.codingskillshub.bitpigeon.domain.interfaces.dao.UserDao
-import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
-import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +38,9 @@ class OnlineChatService @Inject constructor(
     private val _availablePeerClients = MutableStateFlow<List<Client>>(emptyList())
     val availablePeerClients: StateFlow<List<Client>> = _availablePeerClients.asStateFlow()
 
+    private val _wifiGroupPeers = MutableStateFlow<List<WifiDirectPeer>>(emptyList())
+    val wifiGroupPeers: StateFlow<List<WifiDirectPeer>> = _wifiGroupPeers.asStateFlow()
+
     private val _incomingPeerClients = MutableSharedFlow<ChatGroup>()
     val incomingPeerClients = _incomingPeerClients.asSharedFlow()
 
@@ -50,8 +53,6 @@ class OnlineChatService @Inject constructor(
     private var adhocServer: AdhocServer? = null
     private var chatClient: ChatClient? = null
 
-    private var _selfUser: User = User("", "", "", "", "")
-
     companion object {
         private const val PORT = 8888
     }
@@ -59,23 +60,24 @@ class OnlineChatService @Inject constructor(
     init {
         serviceScope.launch {
             val myId = configurationService.userIdFlow.firstOrNull() ?: ""
-//            val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
-//            _selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
-            _selfUser = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = "Me", deviceAddress = "",  "", "")
-//            wifiCommunicationService.startServiceAdvertising(_selfUser)
-            wifiCommunicationService.setUserDetails(_selfUser)
+            val myName = configurationService.userNameFlow.firstOrNull() ?: ""
+            val user = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = myName, deviceAddress = "",  "", "")
+            wifiCommunicationService.setUserDetails(user)
             wifiCommunicationService.connectionInfo.collectLatest { info ->
                 if (info == null) {
+                    // Momentary glitches in P2P connection can cause info to be null.
+                    // Delaying stopAll allows the system a chance to recover without tearing down the app's session immediately.
+                    delay(2000)
                     stopAll()
                 } else {
                     if (info.isGroupOwner) {
                         startServer()
-                        wifiCommunicationService.stopServiceAdvertising()
-                        wifiCommunicationService.onServiceAdvertisingChanged = { isAdvertising ->
-                            if (!isAdvertising) {
-                                wifiCommunicationService.startServiceAdvertising(_selfUser, true)
-                            }
-                        }
+//                        wifiCommunicationService.stopServiceAdvertising()
+//                        wifiCommunicationService.onServiceAdvertisingChanged = { isAdvertising ->
+//                            if (!isAdvertising) {
+//                                wifiCommunicationService.startServiceAdvertising(_selfUser, true)
+//                            }
+//                        }
                         val host = info.groupOwnerAddress?.hostAddress
                         if (host != null) {
                             startClient(host)
@@ -84,7 +86,7 @@ class OnlineChatService @Inject constructor(
                         val host = info.groupOwnerAddress?.hostAddress
                         if (host != null) {
                             startClient(host)
-                            wifiCommunicationService.stopServiceAdvertising()
+//                            wifiCommunicationService.stopServiceAdvertising()
                         }
                     }
                 }
@@ -108,11 +110,15 @@ class OnlineChatService @Inject constructor(
         }
     }
 
-    private fun startClient(host: String) {
+    private suspend fun startClient(host: String) {
         if (chatClient == null) {
             Log.d("OnlineChatService", "Starting ChatClient connecting to $host:$PORT")
 
-            chatClient = ChatClient(_selfUser).apply {
+            val myId = configurationService.userIdFlow.firstOrNull() ?: ""
+            val myName = configurationService.userNameFlow.firstOrNull() ?: ""
+            val user = userDao.getUserById(myId).firstOrNull() ?: User(id = myId, name = myName, deviceAddress = "",  "", "")
+
+            chatClient = ChatClient(user).apply {
                 onAvailablePeerClientsUpdated = { clients ->
                     _availablePeerClients.value = clients
                 }
@@ -128,8 +134,8 @@ class OnlineChatService @Inject constructor(
                 }
                 onServerDisconnection = {
                     _availablePeerClients.value = emptyList()
+                    wifiCommunicationService.leaveGroup()
                     chatClient = null
-                    wifiCommunicationService.startServiceAdvertising(_selfUser)
                 }
                 onUserInfoReceived = { user ->
                     serviceScope.launch {
@@ -141,8 +147,37 @@ class OnlineChatService @Inject constructor(
                         _incomingGetProfilePictureRequest.emit(appFileRequest)
                     }
                 }
+                onWifiGroupPeersUpdate = { peers ->
+                    _wifiGroupPeers.value = peers
+                }
+                onConnectedToServer = {
+                    serviceScope.launch {
+                        sendLocalWifiDirectPeerInfo()
+                    }
+                }
             }
             chatClient?.connectToServer(host, PORT)
+        }
+    }
+
+    private suspend fun sendLocalWifiDirectPeerInfo() {
+        delay(5000)
+        val localDeviceInfo = wifiCommunicationService.getLocalDeviceInfo()
+        val myId = configurationService.userIdFlow.firstOrNull() ?: ""
+        val myName = configurationService.userNameFlow.firstOrNull() ?: ""
+        val connectionInfo = wifiCommunicationService.connectionInfo.value
+        if (localDeviceInfo != null && connectionInfo != null) {
+            val myDevice = WifiDirectPeer(
+                deviceName = localDeviceInfo.deviceName,
+                deviceMacAddress = localDeviceInfo.deviceAddress,
+                isGroupOwner = connectionInfo.isGroupOwner,
+                userId = myId,
+                userName = myName
+            )
+            chatClient?.syncWifiDirectPeerInfo(myDevice)
+        } else {
+            wifiCommunicationService.updateLocalDeviceInfo()
+            sendLocalWifiDirectPeerInfo()
         }
     }
 

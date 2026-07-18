@@ -8,6 +8,7 @@ import com.codingskillshub.bitpigeon.domain.entities.ChatGroup
 import com.codingskillshub.bitpigeon.domain.entities.ChatMessage
 import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import com.codingskillshub.bitpigeon.infrastructure.ClientSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,8 +28,9 @@ class ChatClient(
     var onCreateDirectChat: ((ChatGroup) -> Unit)? = null
     var onChatMessageReceived: ((ChatMessage) -> Unit)? = null
     var onServerDisconnection: (() -> Unit)? = null
+    var onConnectedToServer: (() -> Unit)? = null
     var onUserInfoReceived: ((User) -> Unit)? = null
-
+    var onWifiGroupPeersUpdate: ((List<WifiDirectPeer>) -> Unit)? = null
     var onGetProfilePictureRequest: ((AppFileRequest) -> Unit)? = null
 
     init {
@@ -68,6 +70,9 @@ class ChatClient(
                 val appFile = message.data as AppFileRequest
                 handleGetProfilePictureRequest(appFile)
             }
+            "WIFI_GROUP_PEERS_UPDATE" -> {
+                handleWifiGroupPeersUpdate(message.data)
+            }
         }
     }
 
@@ -82,6 +87,7 @@ class ChatClient(
                     clientSocketManager?.connect(ip, port)
                     clientSocketManager?.sendMessage(selfUser)
                     connected = true
+                    handleServerConnection()
                     Log.d("ChatClient", "Successfully connected to server at $ip:$port")
                 } catch (e: Exception) {
                     attempts++
@@ -138,9 +144,55 @@ class ChatClient(
         sendRequestMessage(message)
     }
 
+    fun syncWifiDirectPeerInfo(peer: WifiDirectPeer) {
+        val message = ActionMessage("SYNC_WIFI_DIRECT_PEER_INFO", peer)
+        sendRequestMessage(message)
+    }
+
+    private fun handleWifiGroupPeersUpdate(data: Any) {
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val peers = data as? List<Any>
+            if (peers != null) {
+                // Validate that all items are actually WifiDirectPeer objects
+                val validPeers = peers.filterIsInstance<WifiDirectPeer>()
+                if (validPeers.size == peers.size) {
+                    onWifiGroupPeersUpdate?.invoke(validPeers)
+                } else {
+                    Log.e("ChatClient", "ERROR: WiFi group peers list contains non-WifiDirectPeer objects. Expected: ${peers.size}, Valid peers: ${validPeers.size}")
+                    Log.e("ChatClient", "Invalid data types: ${peers.map { it::class.simpleName }}")
+                    // Invoke with valid peers only
+                    onWifiGroupPeersUpdate?.invoke(validPeers)
+                }
+            } else {
+                Log.e("ChatClient", "ERROR: WiFi group peers data is not a list. Received: ${data::class.simpleName}")
+            }
+        } catch (e: Exception) {
+            Log.e("ChatClient", "ERROR processing WiFi group peers: ${e.message}", e)
+        }
+    }
+
     private fun handleAvailableClientsUpdate(data: Any) {
-        val clients = data as List<Client>
-        onAvailablePeerClientsUpdated?.invoke(clients)
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val clientList = data as? List<Any>
+            if (clientList != null) {
+                // Validate that all items are actually Client objects
+                val validClients = clientList.filterIsInstance<Client>()
+                if (validClients.size == clientList.size) {
+                    onAvailablePeerClientsUpdated?.invoke(validClients)
+                } else {
+                    Log.e("ChatClient", "ERROR: Available clients list contains non-Client objects. Expected: ${clientList.size}, Valid Client objects: ${validClients.size}")
+                    Log.e("ChatClient", "Invalid data types: ${clientList.map { it::class.simpleName }}")
+                    // Invoke with valid clients only
+                    onAvailablePeerClientsUpdated?.invoke(validClients)
+                }
+            } else {
+                Log.e("ChatClient", "ERROR: Available clients data is not a list. Received: ${data::class.simpleName}")
+            }
+        } catch (e: Exception) {
+            Log.e("ChatClient", "ERROR processing available clients: ${e.message}", e)
+        }
     }
 
     private fun handleCreateDirectChatRequest(group: ChatGroup) {
@@ -157,6 +209,10 @@ class ChatClient(
 
     private fun handleGetProfilePictureRequest(appFileRequest: AppFileRequest) {
         onGetProfilePictureRequest?.invoke(appFileRequest)
+    }
+
+    private fun handleServerConnection() {
+        onConnectedToServer?.invoke()
     }
 
     private fun handleServerDisconnection() {

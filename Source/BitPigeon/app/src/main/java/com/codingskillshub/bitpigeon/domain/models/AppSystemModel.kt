@@ -342,7 +342,7 @@ class AppSystemModel @Inject constructor(
         } else {
             context.packageManager.getPackageInfo(context.packageName, 0)
         }
-        return packageInfo.versionName?: "0.0"
+        return packageInfo.versionName?: "0.0.0"
     }
 
     suspend fun changeAppTheme(theme: String) {

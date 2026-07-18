@@ -15,7 +15,8 @@ import com.codingskillshub.bitpigeon.domain.entities.AttachmentPreviewData
 
 @Composable
 fun AttachmentPreviewBanner(
-    attachedItems: List<AttachmentPreviewData>
+    attachedItems: List<AttachmentPreviewData>,
+    onRemoveAttachment: (AttachmentPreviewData) -> Unit
 ) {
     if (attachedItems.isEmpty()) return
 
@@ -28,7 +29,11 @@ fun AttachmentPreviewBanner(
                 AttachmentPreviewEntry(
                     fileName = item.fileName,
                     fileType = item.fileType,
-                    fileUri = item.fileUri.toString()
+                    fileUri = item.fileUri.toString(),
+                    showRemoveButton = true,
+                    onRemoveClick = {
+                        onRemoveAttachment(item)
+                    }
                 )
             }
         }
@@ -53,6 +58,6 @@ fun AttachmentPreviewBannerPreview() {
         )
     )
     MaterialTheme() {
-        AttachmentPreviewBanner(attachedItems = dummyAttachmentPreviewData)
+        AttachmentPreviewBanner(attachedItems = dummyAttachmentPreviewData, {})
     }
 }

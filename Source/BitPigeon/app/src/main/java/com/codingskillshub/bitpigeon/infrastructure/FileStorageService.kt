@@ -19,6 +19,42 @@ import javax.inject.Singleton
 class FileStorageService @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    /**
+     * Get input stream from file:// or content:// URI
+     * @param fileUri The URI string (file:// or content://)
+     * @param functionName The name of the calling function (for logging)
+     * @return InputStream if successful, null otherwise
+     */
+    fun getInputStream(fileUri: String, functionName: String): java.io.InputStream? {
+        return try {
+            val uri = Uri.parse(fileUri)
+            when {
+                uri.scheme == "file" -> {
+                    Log.d("FileStorageService","[$functionName] Using FileInputStream for file:// URI")
+                    val filePath = uri.path
+                    if (filePath == null) {
+                        Log.e("FileStorageService","[$functionName] ✗ Failed to extract path from file URI: $fileUri")
+                        return null
+                    }
+                    val file = java.io.File(filePath)
+                    if (!file.exists()) {
+                        Log.e("FileStorageService","[$functionName] ✗ File does not exist at path: $filePath")
+                        return null
+                    }
+                    Log.d("FileStorageService","[$functionName] File exists: ${file.absolutePath}, size: ${file.length()} bytes")
+                    java.io.FileInputStream(file)
+                }
+                else -> {
+                    Log.d("FileStorageService","[$functionName] Using ContentResolver for content:// URI")
+                    context.contentResolver.openInputStream(uri)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FileStorageService","[$functionName] ✗ Exception getting input stream: ${e.message}", e)
+            null
+        }
+    }
+
     fun getOutputStream(fileName: String, isPrivateStorage: Boolean): Pair<OutputStream, Uri> {
         return if (isPrivateStorage) {
             val directory = File(context.getExternalFilesDir(null), "BitPigeon")

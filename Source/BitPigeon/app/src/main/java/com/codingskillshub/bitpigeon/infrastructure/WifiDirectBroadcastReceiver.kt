@@ -18,7 +18,8 @@ class WifiDirectBroadcastReceiver(
     private val onStateChanged: (Boolean) -> Unit,
     private val onPeersChanged: () -> Unit,
     private val onConnectionChanged: (NetworkInfo?) -> Unit,
-    private val onDeviceChanged: (WifiP2pDevice) -> Unit
+    private val onDeviceChanged: (WifiP2pDevice) -> Unit,
+    private val onPeerDiscoveryChanged: (Boolean) -> Unit
 ) : BroadcastReceiver() {
 
     @SuppressLint("MissingPermission")
@@ -62,11 +63,11 @@ class WifiDirectBroadcastReceiver(
                 when (state) {
                     WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED -> {
                         Log.d("WifiDirectBR", "Discovery Started")
-                        // You could trigger a UI loading spinner here
+                        onPeerDiscoveryChanged(true)
                     }
                     WifiP2pManager.WIFI_P2P_DISCOVERY_STOPPED -> {
                         Log.d("WifiDirectBR", "Discovery Stopped")
-                        // You could hide the loading spinner here
+                        onPeerDiscoveryChanged(false)
                     }
                 }
             }

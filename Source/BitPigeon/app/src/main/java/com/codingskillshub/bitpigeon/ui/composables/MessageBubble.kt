@@ -151,12 +151,14 @@ fun MessageBubble(
                     }
                 }
 
-                // Message Body
-                Text(
-                    text = messageText,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = contentColor
-                )
+                if (messageText.isNotEmpty()) {
+                    // Message Body
+                    Text(
+                        text = messageText,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = contentColor
+                    )
+                }
 
                 // 4. Timestamp at bottom right
                 Text(

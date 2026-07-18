@@ -18,14 +18,13 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,8 +44,10 @@ class ConversationModel @Inject constructor(
 ) {
     // We create a dedicated scope for the model to keep the flow active
     private val modelScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val _usersOnline = MutableSharedFlow<List<User>>()
-    val usersOnline = _usersOnline.asSharedFlow()
+    // Changed from MutableSharedFlow to MutableStateFlow to retain the current list of online users
+    // This ensures handleIncomingNewChatGroup() can always access the latest online users when syncing
+    private val _usersOnline = MutableStateFlow<List<User>>(emptyList())
+    val usersOnline = _usersOnline.asStateFlow()
 
     private val _onlineGroups = MutableStateFlow<List<ChatGroup>>(emptyList())
     val onlineGroups: StateFlow<List<ChatGroup>> = _onlineGroups.asStateFlow()
@@ -132,6 +133,8 @@ class ConversationModel @Inject constructor(
 
         if (!isPersonal) {
             onlineChatService.sendCreateDirectChatRequest(ChatGroup(groupDb.copy(name = myId),members))
+            delay(300)
+            syncOnlineChatGroups(usersOnline.firstOrNull() ?: emptyList())
         }
 
         return groupDb.id
@@ -169,7 +172,8 @@ class ConversationModel @Inject constructor(
         val myId = configurationService.userIdFlow.firstOrNull() ?: return
         val myName = configurationService.userNameFlow.firstOrNull() ?: "Me"
         val selfUser = User(id = myId, name = myName, deviceAddress = "",  "", "")
-        createDirectChat(selfUser, isPersonal = true)
+        val user = userDao.getUserById(myId).firstOrNull() ?: selfUser
+        createDirectChat(user, isPersonal = true)
         Log.i("ConversationModel", "My Personal Chat created!!!")
     }
 
@@ -186,12 +190,14 @@ class ConversationModel @Inject constructor(
         if (existingGroup != null) {
             return
         }
+        Log.i("ConversationModel", "Received new chat group: $chatGroup")
         chatGroupDao.insertOrUpdateChatGroup(chatGroup.group)
         chatGroupDao.insertMembers(chatGroup.members)
+        syncOnlineChatGroups(usersOnline.firstOrNull() ?: emptyList())
     }
 
     // Any group containing more than 1 member online is considered an online group
-    suspend fun syncOnlineChatGroups(onlineUsers: List<User>) {
+    private suspend fun syncOnlineChatGroups(onlineUsers: List<User>) {
         val onlineUserIds = onlineUsers.map { it.id }.toSet()
 
         // Get all chat groups
@@ -222,7 +228,9 @@ class ConversationModel @Inject constructor(
                 updatedUser = user.copy(profilePicture = existingProfilePicture)
             }
         } else {
-            appSystemModel.getProfilePicture(user.profilePicture, user.id)
+            if (user.profilePicture.isNotEmpty() && user.profilePicture != "") {
+                appSystemModel.getProfilePicture(user.profilePicture, user.id)
+            }
             updatedUser = user.copy(profilePicture = "")
         }
         userDao.insertOrUpdateUser(updatedUser)

@@ -7,6 +7,7 @@ import com.codingskillshub.bitpigeon.domain.entities.Client
 import com.codingskillshub.bitpigeon.domain.entities.ActionMessage
 import com.codingskillshub.bitpigeon.domain.entities.AppFileRequest
 import com.codingskillshub.bitpigeon.domain.entities.User
+import com.codingskillshub.bitpigeon.domain.types.WifiDirectPeer
 import com.codingskillshub.bitpigeon.infrastructure.ServerSocketManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -25,6 +26,8 @@ class AdhocServer {
     // Thread-safe list for clients
     private val clients = CopyOnWriteArrayList<Client>()
     private val chatRooms: MutableMap<String, MutableList<Client>> = mutableMapOf()
+
+    private val peersInWifiGroup: MutableList<WifiDirectPeer> = mutableListOf()
 
     private val chatGroups: MutableList<ChatGroup> = mutableListOf()
 
@@ -61,7 +64,9 @@ class AdhocServer {
             clientsMutex.withLock {
                 clients.add(client)
                 Log.d("AdhocServer", "Client connected: ${client.user}")
-                sendAvailableClientsLocked(clients.toList())
+                // Create immutable snapshot of clients to avoid concurrent modification
+                val clientSnapshot = clients.toList()
+                sendAvailableClientsLocked(clientSnapshot)
             }
         }
     }
@@ -76,12 +81,15 @@ class AdhocServer {
                 chatRooms.forEach { (_, members) ->
                     members.remove(disconnectedClient)
                 }
-                sendAvailableClientsLocked(clients.toList())
+                // Create immutable snapshot of clients to avoid concurrent modification
+                val clientSnapshot = clients.toList()
+                sendAvailableClientsLocked(clientSnapshot)
             }
         }
     }
 
     private fun handleClientRequest(message: ActionMessage, clientId: String) {
+        Log.d("AdhocServer", "Received Client Request Message: $message")
         when (message.actionType) {
             "CREATE_DIRECT_CHAT" -> {
                 relayDirectChatCreationRequest(message, clientId)
@@ -100,8 +108,10 @@ class AdhocServer {
             "GET_PROFILE_PICTURE" -> {
                 relayGetProfilePictureRequest(message, clientId)
             }
+            "SYNC_WIFI_DIRECT_PEER_INFO" -> {
+                handleWifiDirectPeerInfo(message, clientId)
+            }
         }
-        Log.d("AdhocServer", "Received Client Request Message: $message")
     }
 
     fun relayGroupCreationRequest(group: ChatGroup) {
@@ -110,6 +120,7 @@ class AdhocServer {
 
     fun relayDirectChatCreationRequest(message: ActionMessage, clientId: String) {
         val group = message.data as ChatGroup
+        handleOnlineChatGroupsUpdate(listOf(group)  , clientId)
         for (member in group.members) {
             val memberClient = clients.find { it.user.id == member.userId && it.user.id != clientId }
             if (memberClient != null) {
@@ -167,16 +178,6 @@ class AdhocServer {
         }
     }
 
-    private suspend fun sendAvailableClients(clients: List<Client>) {
-        val message = ActionMessage(
-            actionType = "AVAILABLE_CLIENTS_UPDATE",
-            data = clients
-        )
-        for (client: Client in clients) {
-            serverSocketManager?.sendMessageToClient(message, client.user.id)
-        }
-    }
-
     private suspend fun sendAvailableClientsLocked(clientSnapshot: List<Client>) {
         for (recipientClient in clientSnapshot) {
             // Send all clients except the recipient itself
@@ -184,15 +185,17 @@ class AdhocServer {
                 it.user.id != recipientClient.user.id
             }
 
+            // Create message with a copy of the list to avoid mutation issues
+            val messageData: List<Client> = otherClients.toList()
             val message = ActionMessage(
                 actionType = "AVAILABLE_CLIENTS_UPDATE",
-                data = otherClients
+                data = messageData
             )
 
             serverScope.launch {
                 try {
                     serverSocketManager?.sendMessageToClient(message, recipientClient.user.id)
-                    Log.d("AdhocServer", "Sent ${otherClients.size} available clients to ${recipientClient.user.name}")
+                    Log.d("AdhocServer", "Sent ${messageData.size} available clients to ${recipientClient.user.name}")
                 } catch (e: Exception) {
                     Log.e("AdhocServer", "Failed to send clients to ${recipientClient.user.name}: ${e.message}")
                 }
@@ -222,6 +225,42 @@ class AdhocServer {
                 if (client !in roomClients) {
                     roomClients.add(client)
                 }
+            }
+        }
+    }
+
+    private fun handleWifiDirectPeerInfo(message: ActionMessage, clientId: String) {
+        // Handle the Wi-Fi Direct peer info update
+        Log.d("AdhocServer", "Received Wi-Fi Direct peer info from client $clientId: ${message.data}")
+        val peerInfo = message.data as WifiDirectPeer
+        if (peersInWifiGroup.none { it.userId == peerInfo.userId }) {
+            peersInWifiGroup.add(peerInfo)
+            Log.d("AdhocServer", "Added new peer to WiFi group: ${peerInfo.userName}")
+            // Launch on server scope to send updates to all connected clients
+            serverScope.launch {
+                clientsMutex.withLock {
+                    // Create immutable snapshot of peers and clients before sending
+                    val peerSnapshot = peersInWifiGroup.toList()
+                    val clientSnapshot = clients.toList()
+                    sendWifiGroupPeersUpdate(peerSnapshot, clientSnapshot)
+                }
+            }
+        }
+    }
+
+    private suspend fun sendWifiGroupPeersUpdate(peers: List<WifiDirectPeer>, clientSnapshot: List<Client>) {
+        // Create the message once with immutable data
+        for (recipientClient in clientSnapshot) {
+            val peersData: List<WifiDirectPeer> = peers.toList()  // Create immutable copy
+            val message = ActionMessage(
+                actionType = "WIFI_GROUP_PEERS_UPDATE",
+                data = peersData
+            )
+            try {
+                serverSocketManager?.sendMessageToClient(message, recipientClient.user.id)
+                Log.d("AdhocServer", "Sent ${peersData.size} WiFi group peers to ${recipientClient.user.name}")
+            } catch (e: Exception) {
+                Log.e("AdhocServer", "Failed to send WiFi group peers to ${recipientClient.user.name}: ${e.message}")
             }
         }
     }

@@ -56,6 +56,9 @@ class WifiCommunicationService @Inject constructor(
     // 2. Expose as read-only StateFlow for ViewModels to collect
     val isWifiEnabled: StateFlow<Boolean> = _isWifiEnabled.asStateFlow()
 
+    private val _isPeerDiscoveryActive = MutableStateFlow(false)
+    val isPeerDiscoveryActive: StateFlow<Boolean> = _isPeerDiscoveryActive.asStateFlow()
+
     private val _isWifiDirectServiceAdvertisingEnabled = MutableStateFlow(false)
     val isWifiDirectServiceAdvertisingEnabled: StateFlow<Boolean> = _isWifiDirectServiceAdvertisingEnabled.asStateFlow()
 
@@ -241,7 +244,7 @@ class WifiCommunicationService @Inject constructor(
     /**
      * Called by BroadcastReceiver when WIFI_P2P_CONNECTION_CHANGED_ACTION triggers
      */
-    fun updateNetworkInfo(networkInfo: NetworkInfo?) {
+    private fun updateNetworkInfo(networkInfo: NetworkInfo?) {
         if (networkInfo?.isConnected ?: false) {
             manager.requestConnectionInfo(channel) { info ->
                 _connectionInfo.value = info
@@ -275,6 +278,18 @@ class WifiCommunicationService @Inject constructor(
                 })
             } else {
                 doConnect(device)
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun updateLocalDeviceInfo() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) { // Android 10+
+            manager.requestDeviceInfo(channel) { device ->
+                if (device != null) {
+                    Log.d("WifiCommService", "Actual P2P MAC: ${device.deviceAddress}")
+                    localDeviceInfo = device
+                }
             }
         }
     }
@@ -579,23 +594,7 @@ class WifiCommunicationService @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun leaveGroup() {
-        if (hasWifiDirectPermissions()) {
-            manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() {
-                    Log.d("WifiCommService", "Successfully left the group (group removed/left)")
-                    _connectionInfo.value = null
-                }
-
-                override fun onFailure(reason: Int) {
-                    // Reason 2 is BUSY, often happens if already disconnected or no group exists
-                    if (reason == WifiP2pManager.BUSY) {
-                        Log.d("WifiCommService", "removeGroup failed with BUSY - possibly already disconnected.")
-                    } else {
-                        Log.e("WifiCommService", "Failed to leave group: $reason")
-                    }
-                }
-            })
-        }
+        disconnectFromAllDevices()
     }
     
     @SuppressLint("MissingPermission")
@@ -679,6 +678,9 @@ class WifiCommunicationService @Inject constructor(
                     _deviceName.value = it.deviceName
                     Log.d("WifiCommService", "Local device updated: ${it.deviceName} (${it.deviceAddress})")
                 }
+            },
+            onPeerDiscoveryChanged = { isActive ->
+                _isPeerDiscoveryActive.value = isActive
             }
         )
     }

@@ -16,6 +16,7 @@ coil = "3.0.4"
 media3 = "1.5.1"
 material3 = "1.4.0"
 firebaseFirestore = "26.4.0"
+telephoto = "0.19.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -39,6 +40,7 @@ androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.re
 androidx-media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore", version.ref = "firebaseFirestore" }
+telephoto-zoomable-image-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

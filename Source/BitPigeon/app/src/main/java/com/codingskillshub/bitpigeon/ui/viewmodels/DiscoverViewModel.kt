@@ -35,6 +35,8 @@ class DiscoverViewModel @Inject constructor(
 ) : ViewModel() {
     val nearbyPeers: StateFlow<List<WifiDirectPeer>> = discoveryModel.nearbyPeers
     val availableClients: StateFlow<List<Client>> = onlineChatService.availablePeerClients
+    val wifiDirectPeersCount: StateFlow<Int> = discoveryModel.peerDevicesCount
+    val isPeerDiscoveryActive: StateFlow<Boolean> = discoveryModel.isPeerDiscoveryActive
 
     val groupOwnerName: StateFlow<String> = combine(
         availableClients,
@@ -61,7 +63,6 @@ class DiscoverViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = false
     )
-
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()

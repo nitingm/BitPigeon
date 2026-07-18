@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun MessageInputBar(
+    isSendButtonEnabled: Boolean = false,
     onSendMessage: (String) -> Unit = {},
     onAttachButtonClicked: () -> Unit = {}
 ) {
@@ -82,12 +83,12 @@ fun MessageInputBar(
             // Send Button
             IconButton(
                 onClick = {
-                    if (textState.isNotBlank()) {
+                    if (textState.isNotBlank() || isSendButtonEnabled) {
                         onSendMessage(textState)
                         textState = "" // Clear field after sending
                     }
                 },
-                enabled = textState.isNotBlank(),
+                enabled = isSendButtonEnabled || textState.isNotBlank(),
                 colors = IconButtonDefaults.iconButtonColors(
                     contentColor = MaterialTheme.colorScheme.primary,
                     disabledContentColor = MaterialTheme.colorScheme.outlineVariant

@@ -28,8 +28,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import com.codingskillshub.bitpigeon.domain.services.AudioService
-
-import com.codingskillshub.bitpigeon.infrastructure.WifiDirectBroadcastReceiver
 import com.codingskillshub.bitpigeon.domain.services.WifiCommunicationService
 import com.codingskillshub.bitpigeon.ui.onboardingscreens.OnboardingMainView
 import com.codingskillshub.bitpigeon.ui.settingpages.AboutView
@@ -48,7 +46,6 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    // 1. Declare the Manager and Channel
     // 1. Hilt will now provide these singletons automatically
     @Inject
     lateinit var manager: WifiP2pManager
@@ -86,10 +83,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        lifecycleScope.launch {
-
-        }
-
         // 1. Create the launcher
         val requestPermissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -97,8 +90,6 @@ class MainActivity : ComponentActivity() {
             val allGranted = permissions.entries.all { it.value }
             if (allGranted) {
                 wifiService.discoverPeers()
-            } else {
-                // Handle permission denied (e.g., show a snackbar or empty state)
             }
         }
 
@@ -107,7 +98,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            val navController = androidx.navigation.compose.rememberNavController() // From Navigation library
+            val navController = androidx.navigation.compose.rememberNavController()
             val systemViewModel: AppSystemViewModel = hiltViewModel()
             val profileViewModel: ProfileViewModel = hiltViewModel()
             val chatGroupListViewModel: ChatGroupListViewModel = hiltViewModel()
@@ -230,7 +221,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // 3. The receiver now has access to the initialized manager and channel
+        audioService.initialize() // Re-initialize audio resources
         receiver = wifiService.getWifiDirectBroadcastReceiver()
         registerReceiver(receiver, intentFilter)
     }

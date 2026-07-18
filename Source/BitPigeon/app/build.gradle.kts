@@ -16,8 +16,8 @@ android {
         applicationId = "com.codingskillshub.bitpigeon"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -111,6 +111,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.common)
+
+    // Telephoto for zoomable images
+    implementation(libs.telephoto.zoomable.image.coil3)
 
     // Lifecycle runtime compose for LocalLifecycleOwner
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

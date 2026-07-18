@@ -42,6 +42,15 @@ class ClientSocketManager(
             s.connect(InetSocketAddress(host, port), 5000)
             s.keepAlive = true
             socket = s
+            if (socketType == "FCS") {
+                socket?.apply {
+                    sendBufferSize = 1024 * 512  // 512KB
+                    receiveBufferSize = 1024 * 512
+
+                    // Disable Nagle's algorithm for immediate packet delivery
+                    tcpNoDelay = true
+                }
+            }
             
             val out = ObjectOutputStream(s.getOutputStream())
             outStream = out
@@ -82,16 +91,18 @@ class ClientSocketManager(
     suspend fun sendMessage(message: Any) = withContext(Dispatchers.IO) {
         if (!running) {
             Log.w("ClientSocketManager", "$socketType:: Cannot send message, not connected.")
-            return@withContext
+            throw IOException("Not connected")
         }
         try {
             outStream?.writeObject(message)
             outStream?.flush()
         } catch (e: IOException) {
             Log.e("ClientSocketManager", "$socketType:: Send error (Broken pipe): ${e.message}")
-            disconnect() // Peer went offline
+            disconnect()
+            throw e
         } catch (e: Exception) {
             Log.e("ClientSocketManager", "$socketType:: Send error: ${e.message}")
+            throw e
         }
     }
 
@@ -101,8 +112,10 @@ class ClientSocketManager(
         } catch (e: IOException) {
             Log.e("ClientSocketManager", "$socketType:: Byte send error: ${e.message}")
             disconnect()
+            throw e
         } catch (e: Exception) {
             Log.e("ClientSocketManager", "$socketType:: Generic send error: ${e.message}")
+            throw e
         }
     }
 

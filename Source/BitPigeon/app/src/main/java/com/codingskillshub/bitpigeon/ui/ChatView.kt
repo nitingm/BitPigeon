@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -83,6 +84,9 @@ fun ChatView(
             } else {
                 chatViewModel.openAttachmentWithExternalApp(attachment)
             }
+        },
+        onRemoveAttachment = {
+            attachmentUris.remove(it.fileUri)
         }
     )
 
@@ -100,6 +104,7 @@ fun ChatViewContent(
     onBackClick: () -> Unit,
     onTitleClick: () -> Unit,
     onMediaClick: (AttachmentPreviewData) -> Unit,
+    onRemoveAttachment: (AttachmentPreviewData) -> Unit
 ) {
     // List state to handle auto-scrolling or scroll position
     val listState = rememberLazyListState()
@@ -127,30 +132,37 @@ fun ChatViewContent(
             )
         },
         bottomBar = {
-            // Padding used to prevent keyboard overlap in modern Android
-            Column(modifier = Modifier.imePadding()) {
-                if (attachedItems.isNotEmpty()) {
-                    AttachmentPreviewBanner(
-                        attachedItems = attachedItems
-                    )
-                }
-                MessageInputBar(
-                    onSendMessage = { text -> onSendMessage(text) },
-                    onAttachButtonClicked = { onAttachClick() }
-                )
-            }
-        }
+             // Padding used to prevent keyboard overlap in modern Android
+             Column(modifier = Modifier
+                 .imePadding()
+                 .navigationBarsPadding()) {
+                 if (attachedItems.isNotEmpty()) {
+                     AttachmentPreviewBanner(
+                         attachedItems = attachedItems,
+                         onRemoveAttachment = {
+                             onRemoveAttachment(it)
+                         }
+                     )
+                 }
+                 MessageInputBar(
+                     isSendButtonEnabled = attachedItems.isNotEmpty(),
+                     onSendMessage = { text -> onSendMessage(text) },
+                     onAttachButtonClicked = { onAttachClick() }
+                 )
+             }
+         }
     ) { innerPadding ->
-        // The core list of messages
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(bottom = 8.dp),
+         // The core list of messages
+         LazyColumn(
+             state = listState,
+             modifier = Modifier
+                 .fillMaxSize()
+                 .padding(innerPadding)
+                 .navigationBarsPadding(),
+             contentPadding = PaddingValues(bottom = 8.dp),
 
-            reverseLayout = false // Set to true if you want messages to grow from bottom
-        ) {
+             reverseLayout = false // Set to true if you want messages to grow from bottom
+         ) {
             items(
                 items = messages,
                 key = { it.message.id }
@@ -259,6 +271,7 @@ fun ChatViewPreview() {
         true,
         messages = dummyMessages,
         dummyAttachmentPreviewData,
+        {},
         {},
         {},
         {},

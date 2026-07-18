@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,7 +47,9 @@ fun AttachmentPreviewEntry(
     showFileName: Boolean = true,
     isTransferring: Boolean = false,
     progress: Int = 0,
-    onClick: () -> Unit = {}
+    showRemoveButton: Boolean = false,
+    onClick: () -> Unit = {},
+    onRemoveClick: () -> Unit = {}
 ) {
     val boxModifier = when {
         previewSize == PreviewSize.MAX -> Modifier
@@ -91,6 +94,14 @@ fun AttachmentPreviewEntry(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+                if (showRemoveButton) {
+                    Icon(
+                        imageVector = Icons.Default.Cancel,
+                        contentDescription = "Remove",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.clickable { onRemoveClick() }
+                    )
+                }
             }
         }
     } else {
@@ -222,7 +233,8 @@ fun AttachmentPreviewEntryPreview() {
                 fileName = "vacation.png",
                 fileType = "image/png",
                 fileUri = "https://example.com/image.png",
-                viewType = ViewType.LIST
+                viewType = ViewType.LIST,
+                showRemoveButton = true
             )
             Text("List View: (Transferring)")
             AttachmentPreviewEntry(

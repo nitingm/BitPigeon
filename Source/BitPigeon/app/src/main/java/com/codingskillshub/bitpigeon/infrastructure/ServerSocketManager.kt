@@ -135,6 +135,15 @@ class ServerSocketManager(
                 try {
                     val socket = ss.accept()
                     socket.keepAlive = true
+                    if (socketType == "FSS") {
+                        socket?.apply {
+                            sendBufferSize = 1024 * 512  // 512KB
+                            receiveBufferSize = 1024 * 512
+
+                            // Disable Nagle's algorithm for immediate packet delivery
+                            tcpNoDelay = true
+                        }
+                    }
 
                     launch {
                         handleFileClient(socket)

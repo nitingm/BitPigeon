@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
@@ -55,6 +56,9 @@ class AttachmentModel @Inject constructor(
         modelScope.launch {
             wifiCommunicationService.connectionInfo.collectLatest { info ->
                 if (info == null) {
+                    // Momentary glitches in P2P connection can cause info to be null.
+                    // Delaying stopFileTransferServer allows the system a chance to recover without tearing down the server immediately.
+                    delay(2000)
                     fileTransferService.stopFileTransferServer()
                 } else {
                     fileTransferService.startFileTransferServer()
